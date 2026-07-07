@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Image/KORANI_logo.png" alt="KORANI logo" width="600">
+  <img src="Image/KORANI_logo.png" alt="KORANI logo" width="400">
 </p>
 
 <h1 align="center">KORANI</h1>
