@@ -1,0 +1,49 @@
+# KORANI configuration
+#
+# All models are open-weight and served locally behind an OpenAI-compatible
+# endpoint (vLLM or Ollama). Swap any model by editing this file — agent code
+# never hardcodes a model name. A commercial API can be plugged in later by
+# changing base_url/api_key; the client code is provider-agnostic.
+
+llm:
+  # vLLM default: http://localhost:8000/v1
+  # Ollama default: http://localhost:11434/v1
+  base_url: "http://localhost:11434/v1"
+  api_key: "not-needed"          # local servers ignore this; env KORANI_LLM_API_KEY overrides
+
+models:
+  # Role → model name as known to the serving endpoint.
+  # KONI via vLLM:   KISTI-KONI/KONI-Llama3.1-8B-Instruct-20241024
+  # KONI via Ollama: the name you pulled/created (see README), e.g.
+  #   hf.co/RichardErkhov/KISTI-KONI_-_KONI-Llama3-8B-Instruct-20240729-gguf:Q4_K_M
+  interpreter: "koni"
+
+  # Stage B/C agents. Defaults reuse the same served model so a single
+  # `ollama pull` is enough to test; per CLAUDE.md tiering, paper_triage and
+  # especially spec_extractor (RISK STAGE) benefit from a stronger model
+  # (e.g. qwen3:32b) when available.
+  search_planner: "koni"
+  paper_triage: "koni"
+  spec_extractor: "koni"
+
+  # Future roles (uncomment as they are implemented):
+  # evaluator: "qwen3:32b"
+  # engineer: "qwen2.5-coder:32b"
+  # debugger: "qwen2.5-coder:14b"
+  # result_analyst: "qwen2.5-vl:32b"
+
+data_dir: "data"           # korani.db, papers/, specs/ live here
+
+extraction:
+  max_chars: 24000         # paper text budget for the Spec Extractor
+
+search:
+  providers: ["openalex", "semanticscholar"]
+  per_query_limit: 10      # results fetched per query per provider
+  max_candidates: 12       # candidates sent to LLM triage after dedup/pre-rank
+  shortlist_size: 5        # entries shown to the user
+  mailto: ""               # your email → OpenAlex polite pool (recommended)
+
+generation:
+  temperature: 0.2
+  max_tokens: 1024

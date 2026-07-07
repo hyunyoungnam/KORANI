@@ -1,0 +1,46 @@
+# KORANI — KISTI Open Research Agentic Network Intelligence
+# Python >= 3.10
+#
+# LLM policy: open-weight models only, self-hosted behind an
+# OpenAI-compatible endpoint (vLLM or Ollama). The `openai` package below is
+# only the CLIENT library for talking to those local endpoints — no
+# proprietary API is used. Serving stack (vLLM/Ollama) is installed on the
+# GPU host separately, not via this file.
+
+# ── LLM client & agent plumbing ─────────────────────────────
+openai>=1.50           # client for OpenAI-compatible LOCAL endpoints (vLLM/Ollama)
+python-dotenv>=1.0
+pydantic>=2.7
+pyyaml>=6.0
+httpx>=0.27
+tenacity>=8.3
+
+# ── Domain solvers (called as black boxes) ──────────────────
+devsim>=2.8            # TCAD / semiconductor device simulation
+pybamm>=24.5           # battery modeling
+
+# ── Scientific stack ────────────────────────────────────────
+numpy>=1.26
+scipy>=1.13
+pandas>=2.2
+matplotlib>=3.8
+
+# ── Literature search & storage (KoCoScientist pattern) ─────
+sqlalchemy>=2.0
+aiosqlite>=0.20
+faiss-cpu>=1.8         # dense vector index over paper chunks
+rank-bm25>=0.2         # lexical retrieval
+sentence-transformers>=3.0   # local embedding models (e.g. multilingual-e5/BGE-M3 for ko/en)
+pymupdf>=1.24          # PDF parsing
+pymupdf4llm>=0.0.17    # PDF → markdown for LLM consumption
+
+# ── Web API (deferred until a UI is needed) ─────────────────
+# fastapi>=0.111
+# uvicorn>=0.30
+# websockets>=12.0
+
+# ── Model serving (install on the GPU host, not here) ───────
+# vllm>=0.6            # production serving, OpenAI-compatible
+# (or Ollama — installed as a system package, not via pip)
+# Models: KISTI-KONI/KONI-Llama3.1-8B-Instruct-20241024 (Korean boundary),
+#         Qwen3 / Qwen3-Coder / Qwen2.5-VL families, DeepSeek-R1-class
