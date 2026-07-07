@@ -85,7 +85,7 @@ def run_spec_extraction(
     with Storage(data_dir) as storage:
         if candidate is None:
             candidate = PaperCandidate(title=spec.title or Path(pdf_path).name, sources=["local"])
-        work_id = storage.upsert_work(candidate)
+        work_id = storage.upsert_work(candidate, category=spec.domain)
         storage.add_asset(
             work_id, sha, str(pdf_path), format="pdf",
             size_bytes=Path(pdf_path).stat().st_size,

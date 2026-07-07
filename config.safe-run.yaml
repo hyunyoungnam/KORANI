@@ -1,0 +1,27 @@
+llm:
+  base_url: "http://localhost:11434/v1"
+  api_key: "not-needed"
+
+models:
+  interpreter: "koni"
+  search_planner: "qwen2.5:7b"
+  paper_triage: "qwen2.5:7b"
+  spec_extractor: "qwen2.5:7b"
+  evaluator: "qwen2.5:7b"
+  engineer: "qwen2.5:7b"
+  debugger: "qwen2.5:7b"
+  result_analyst: "qwen2.5:7b"
+  proposer_critic: "qwen2.5:7b"
+
+data_dir: "data"
+
+execution:
+  timeout_seconds: 60
+
+budget:
+  max_solver_runs: 1
+  max_debug_retries: 0
+  max_variants: 1
+
+analysis:
+  use_vision: false

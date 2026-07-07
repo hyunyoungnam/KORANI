@@ -18,8 +18,10 @@ async SQLAlchemy would be dead weight here.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -115,7 +117,7 @@ class Storage:
 
     # ── works ──────────────────────────────────────────────────────
 
-    def upsert_work(self, candidate: PaperCandidate) -> str:
+    def upsert_work(self, candidate: PaperCandidate, category: str = "unknown") -> str:
         """Insert the paper or return the existing work id (DOI match)."""
         if candidate.doi:
             row = self._conn.execute(
@@ -123,7 +125,7 @@ class Storage:
             ).fetchone()
             if row:
                 return row[0]
-        work_id = str(uuid.uuid4())
+        work_id = self._next_work_id(category)
         self._conn.execute(
             "INSERT INTO works (id, title, year, doi, authors_json, url, pdf_url,"
             " citation_count, sources_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -141,6 +143,42 @@ class Storage:
         )
         self._conn.commit()
         return work_id
+
+    def _next_work_id(self, category: str) -> str:
+        """Readable id: battery_01_260707 or tcad_01_260707.
+
+        Sequence increases per category across all dates, so today's second
+        battery simulation follows yesterday's first battery simulation.
+        """
+        normalized = (category or "unknown").strip().lower()
+        prefix_by_category = {
+            "battery": "battery",
+            "semiconductor": "tcad",
+            "tcad": "tcad",
+        }
+        normalized = prefix_by_category.get(normalized, "unknown")
+
+        prefix = f"{normalized}_"
+        rows = self._conn.execute(
+            "SELECT id FROM works WHERE id LIKE ?", (prefix + "%",)
+        ).fetchall()
+        pattern = re.compile(rf"^{re.escape(prefix)}(\d+)_\d{{6}}$")
+        max_seen = 0
+        for (work_id,) in rows:
+            match = pattern.match(work_id)
+            if match:
+                max_seen = max(max_seen, int(match.group(1)))
+
+        date_stamp = datetime.now().strftime("%y%m%d")
+        seq = max_seen + 1
+        while True:
+            work_id = f"{prefix}{seq:02d}_{date_stamp}"
+            exists = self._conn.execute(
+                "SELECT 1 FROM works WHERE id = ?", (work_id,)
+            ).fetchone()
+            if not exists:
+                return work_id
+            seq += 1
 
     def get_work(self, work_id: str) -> Optional[dict]:
         row = self._conn.execute(

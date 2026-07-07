@@ -33,10 +33,11 @@ def run_script(script_path: str, cwd: str, timeout_s: float = 900.0) -> RunResul
     env = dict(os.environ)
     env["PYTHONIOENCODING"] = "utf-8"
     env["MPLBACKEND"] = "Agg"  # generated code must never open a GUI
+    script = Path(script_path).resolve()
     start = time.monotonic()
     try:
         proc = subprocess.run(
-            [sys.executable, str(script_path)],
+            [sys.executable, str(script)],
             cwd=str(cwd),
             capture_output=True,
             timeout=timeout_s,

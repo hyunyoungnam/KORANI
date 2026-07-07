@@ -10,6 +10,7 @@ stage D/F verification stays meaningful.
 from __future__ import annotations
 
 from korani.codeutil import extract_python_code
+from korani.knowledge import get_knowledge_module
 from korani.llm import LLMClient
 from korani.models import EvaluationContract, SimulationSpec, VariantPlan
 
@@ -35,6 +36,8 @@ ambiguity-resolved value with an `# ASSUMPTION:` comment.
 5. Never call plt.show() or block on input; saving figures as PNG is fine.
 6. No network access and no package installation inside the script.
 7. Print brief progress lines so failures are diagnosable.
+8. Treat the solver template as the required structure unless the spec makes
+   a small adaptation necessary. Do not ignore its API/file-existence guards.
 
 Respond with the script in ONE ```python code fence and nothing else.
 """
@@ -60,6 +63,19 @@ def _check_lines(contract: EvaluationContract) -> str:
     if curves:
         parts.append("Curve check keys (save <key>.csv each):\n" + "\n".join(curves))
     return "\n\n".join(parts)
+
+
+def _template_block(spec: SimulationSpec, contract: EvaluationContract) -> str:
+    try:
+        context = get_knowledge_module(spec.solver).build_template_context(spec, contract)
+    except ValueError:
+        return ""
+    return (
+        "\n\nSolver template context (%s):\n%s\n\n"
+        "Start from this scaffold and fill it for the SimulationSpec:\n"
+        "```python\n%s\n```"
+        % (context.name, context.instructions, context.template)
+    )
 
 
 class Engineer:
@@ -99,7 +115,7 @@ class Engineer:
                                 exclude={"work_id", "target_results"}, indent=2
                             ),
                             _check_lines(contract),
-                            resolutions,
+                            _template_block(spec, contract) + resolutions,
                         )
                     ),
                 },

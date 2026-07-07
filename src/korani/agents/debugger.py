@@ -29,6 +29,8 @@ fix what you can.
 4. Keep the output contract intact: the script must still write \
 results.json with the same keys (values computed from the simulation, \
 never hardcoded) and the same curve CSV files.
+5. Keep the solver template's structure and guards unless the traceback proves \
+a specific line must change.
 """
 
 
@@ -46,7 +48,12 @@ class Debugger:
         self.max_tokens = max_tokens
 
     def debug(
-        self, code: str, error_tail: str, solver: str, hint: Optional[str] = None
+        self,
+        code: str,
+        error_tail: str,
+        solver: str,
+        hint: Optional[str] = None,
+        template_context: str = "",
     ) -> str:
         hint_block = ""
         if hint:
@@ -61,8 +68,9 @@ class Debugger:
                 {
                     "role": "user",
                     "content": (
-                        "Solver: %s\n\nError output:\n%s%s\n\nCurrent script:\n"
-                        "```python\n%s\n```" % (solver, error_tail, hint_block, code)
+                        "Solver: %s\n\nError output:\n%s%s%s\n\nCurrent script:\n"
+                        "```python\n%s\n```"
+                        % (solver, error_tail, hint_block, template_context, code)
                     ),
                 },
             ],

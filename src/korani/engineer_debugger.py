@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Tuple
 from korani import playbook
 from korani.agents.debugger import Debugger, DebuggerError
 from korani.agents.engineer import Engineer, EngineerError
+from korani.knowledge import get_knowledge_module
 from korani.llm import LLMClient, OpenAICompatClient
 from korani.models import (
     EvaluationContract,
@@ -197,6 +198,7 @@ def _run_variant(
     debug_used = 0
     fixed_signature = None  # error class of the failure the last fix targeted
     fixed_error_tail = ""
+    template_context = _debug_template_context(spec, contract)
     while True:
         script.write_text(code, encoding="utf-8")
         outcome.code_path = str(script)
@@ -242,10 +244,28 @@ def _run_variant(
         fixed_error_tail = error_tail
         hint = playbook.lookup(data_dir, spec.solver, fixed_signature)
         try:
-            code = debugger.debug(code, error_tail, spec.solver, hint=hint)
+            code = debugger.debug(
+                code,
+                error_tail,
+                spec.solver,
+                hint=hint,
+                template_context=template_context,
+            )
         except DebuggerError as exc:
             outcome.error_tail += "\n[Debugger] %s" % exc
             return outcome
+
+
+def _debug_template_context(spec: SimulationSpec, contract: EvaluationContract) -> str:
+    try:
+        context = get_knowledge_module(spec.solver).build_template_context(spec, contract)
+    except ValueError:
+        return ""
+    return (
+        "\n\nSolver template context to preserve during the fix (%s):\n%s\n\n"
+        "Template scaffold:\n```python\n%s\n```"
+        % (context.name, context.instructions, context.template)
+    )
 
 
 # ── scoring & persistence ──────────────────────────────────────────

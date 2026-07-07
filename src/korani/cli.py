@@ -350,7 +350,7 @@ def _pick_from_shortlist(shortlist: Shortlist, pick: int = None) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        prog="korani", description="KORANI — Korean co-scientist (stages A-F test CLI)"
+        prog="korani", description="KORANI — Korean co-scientist (stages A-F CLI)"
     )
     parser.add_argument("question", help="연구 요청 (한국어)")
     parser.add_argument("--paper", default=None, help="논문 PDF 경로 (Mode A)")

@@ -194,6 +194,50 @@ class SpecExtractor:
         if data.get("solver") not in ("pybamm", "devsim", "none"):
             data["solver"] = "none"
         data.pop("work_id", None)
+        for key in (
+            "governing_equations",
+            "materials",
+            "parameters",
+            "operating_conditions",
+            "numerical_settings",
+            "target_results",
+            "ambiguities",
+        ):
+            if data.get(key) is None:
+                data[key] = []
+        for ambiguity in data.get("ambiguities", []):
+            if isinstance(ambiguity, dict) and ambiguity.get("candidates") is None:
+                ambiguity["candidates"] = []
+        for key in (
+            "governing_equations",
+            "materials",
+            "operating_conditions",
+            "numerical_settings",
+        ):
+            normalized = []
+            for item in data.get(key, []):
+                if isinstance(item, str):
+                    normalized.append(item)
+                elif isinstance(item, dict):
+                    normalized.append("; ".join(
+                        "%s: %s" % (k, v) for k, v in item.items() if v is not None
+                    ))
+                elif item is not None:
+                    normalized.append(str(item))
+            data[key] = normalized
+        for target in data.get("target_results", []):
+            if not isinstance(target, dict):
+                continue
+            for key in ("description", "location", "quantity", "value"):
+                value = target.get(key)
+                if isinstance(value, list):
+                    target[key] = ", ".join(str(item) for item in value)
+                elif isinstance(value, dict):
+                    target[key] = "; ".join(
+                        "%s: %s" % (k, v) for k, v in value.items() if v is not None
+                    )
+                elif value is not None and not isinstance(value, str):
+                    target[key] = str(value)
 
         try:
             return SimulationSpec(**data)

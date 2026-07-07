@@ -22,26 +22,26 @@ models:
   # `ollama pull` is enough to test; per CLAUDE.md tiering, paper_triage and
   # especially spec_extractor (RISK STAGE) benefit from a stronger model
   # (e.g. qwen3:32b) when available.
-  search_planner: "koni"
-  paper_triage: "koni"
-  spec_extractor: "koni"
+  search_planner: "qwen2.5:7b"
+  paper_triage: "qwen2.5:7b"
+  spec_extractor: "qwen2.5:7b"
 
   # Stage D: drafts the evaluation contract (expected values, tolerances)
   # from the spec — a mid-strong model (e.g. qwen3:32b) is recommended.
-  evaluator: "koni"
+  evaluator: "qwen2.5:7b"
 
   # Stage E: coding models per CLAUDE.md tiering — engineer wants
   # qwen2.5-coder:32b / qwen3-coder; debugger can be smaller
   # (e.g. qwen2.5-coder:14b). Defaults reuse the single test model.
-  engineer: "koni"
-  debugger: "koni"
+  engineer: "qwen2.5:7b"
+  debugger: "qwen2.5:7b"
 
   # Stage F: the Result Analyst is a ⚠ RISK STAGE — a VISION model
   # (e.g. qwen2.5-vl:32b) is strongly recommended so it can compare plots;
   # with a text-only model it falls back to downsampled curve data.
   # Proposer+Critic (escalation rung 2 only) share one reasoning-model slot.
-  result_analyst: "koni"
-  proposer_critic: "koni"
+  result_analyst: "qwen2.5:7b"
+  proposer_critic: "qwen2.5:7b"
 
 data_dir: "data"           # korani.db, papers/, specs/ live here
 

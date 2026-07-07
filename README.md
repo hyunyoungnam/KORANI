@@ -102,7 +102,7 @@ layer we deliberately haven't carried over yet.)
 
 ## Try it: ask in Korean
 
-**1. Install** (Python ≥ 3.9)
+**1. Install** (Python ≥ 3.10)
 
 ```bash
 cd KORANI
@@ -182,7 +182,12 @@ Spec Extractor produces a **SimulationSpec** — the equations, geometry,
 parameters (with anything missing explicitly marked, never invented),
 operating conditions, and the figures/tables the reproduction will be
 verified against. Long papers are extracted chunk-by-chunk and merged.
-The spec is saved to `data/specs/` and SQLite for review.
+The spec is saved to `data/specs/` and SQLite for review. By default,
+`data/` is created under the KORANI project root, so with the standard checkout
+it lives at `C:\Users\admin\Desktop\test\KORANI\data`. Each run receives a
+readable `work_id` such as `battery_01_260707` or `tcad_01_260707`, where the
+sequence increases per research category. Semiconductor/DEVSIM runs use the
+`tcad` prefix because the current semiconductor path is TCAD-specific.
 
 **Stage D** then drafts the evaluation contract: each reported result becomes
 a check with an expected value and tolerance, rendered into a standalone
