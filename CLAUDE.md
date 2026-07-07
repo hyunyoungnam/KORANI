@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **KORANI** (KISTI Open Research Agentic Network Intelligence) — a multi-agent
 AI framework that acts as a "co-scientist" for engineers and researchers in
 Korea's semiconductor, battery, and manufacturing industries. Named after the
-고라니 (Korean water deer, `Image/KORANI.jpg`).
+고라니 (Korean water deer, logo at `Image/KORANI_logo.png`).
 
 KORANI does **not** try to replace the commercial simulation software these
 industries already trust (TCAD, CFD, battery modeling tools). Instead it wraps
@@ -252,13 +252,11 @@ src/korani/
     │                          #   user picks — never auto-selects
     └── spec_extractor.py      # ✅ stage C: paper text → SimulationSpec;
                                #   ⚠ RISK STAGE — honesty rules in prompt
-tests/                         # 45 offline tests (stub LLM + httpx.MockTransport
-                               #   + real tiny PDFs + real SQLite in tmp_path)
 ```
 
 Conventions established by stage A — follow them for stages B–F:
-- Agents take an `LLMClient` + model name in the constructor (DI); tests use
-  stub clients, never a live server.
+- Agents take an LLMClient + model name in the constructor (DI), so local
+  manual checks can swap model endpoints without changing agent code.
 - Deterministic decisions (e.g. Mode A/B from paper attachment) are made in
   code, never delegated to the LLM.
 - LLM JSON output is parsed defensively (`_extract_json` tolerates prose and
@@ -296,8 +294,8 @@ Stage C notes:
 Architecture decided (linear pipeline, two entry modes, branch-on-ambiguity,
 open-weight-first model policy, CLI only). Stages A (Interpreter/KONI),
 B (Search Planner → OpenAlex/S2 → Paper Triage → user pick), and
-C (PDF acquire/parse → Spec Extractor → SQLite persistence) are implemented
-and tested; the CLI runs A→B→C end-to-end. Next steps: stage D (Evaluator
+C (PDF acquire/parse → Spec Extractor → SQLite persistence) are implemented;
+the CLI runs A→B→C end-to-end. Next steps: stage D (Evaluator
 drafts evaluate.py from the spec's target_results → human approval); stage E
 Engineer/Debugger with DEVSIM/PyBaMM solver adapters and error taxonomies;
 benchmark open models on the two risk stages (Spec Extractor, Result

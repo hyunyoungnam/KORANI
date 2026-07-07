@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Image/KORANI.jpg" alt="KORANI(고라니)" width="600">
+  <img src="Image/KORANI_logo.png" alt="KORANI logo" width="600">
 </p>
 
 <h1 align="center">KORANI</h1>
@@ -183,12 +183,6 @@ parameters (with anything missing explicitly marked, never invented),
 operating conditions, and the figures/tables the reproduction will be
 verified against. The spec is saved to `data/specs/` and SQLite for review.
 
-**4. Run the tests** (offline, no model server needed):
-
-```bash
-python -m pytest tests/ -q
-```
-
 > Currently implemented: **stage A (Interpreter)**, **stage B
 > (search-and-triage)**, and **stage C (SimulationSpec extraction)**.
 > Stages D–F are under development — see `CLAUDE.md` for the full
@@ -196,39 +190,6 @@ python -m pytest tests/ -q
 > Tip: set `search.mailto` in `config.yaml` (OpenAlex polite pool); behind a
 > corporate proxy with SSL inspection, set `SSL_CERT_FILE` to your company CA
 > or, for local testing only, `search.verify_ssl: false`.
-
-## Repository layout
-
-```
-KORANI/
-├── CLAUDE.md                 # architecture & design decisions (source of truth)
-├── README.md
-├── config.yaml               # LLM endpoint + per-agent model registry
-├── pyproject.toml
-├── requirements.txt
-├── src/korani/
-│   ├── agents/
-│   │   ├── interpreter.py    # stage A: Korean intake (KONI)
-│   │   ├── search_planner.py # stage B: query expansion
-│   │   ├── paper_triage.py   # stage B: reproducibility ranking
-│   │   └── spec_extractor.py # stage C: paper → SimulationSpec
-│   ├── providers/            # OpenAlex + Semantic Scholar clients
-│   ├── search.py             # fan-out, dedup, pre-rank (no LLM)
-│   ├── stage_b.py            # stage B assembly
-│   ├── stage_c.py            # stage C assembly (download/parse/extract/persist)
-│   ├── fulltext.py           # PDF download + PyMuPDF text extraction
-│   ├── storage.py            # SQLite: works, fulltext_assets, simulation_specs
-│   ├── cli.py                # python -m korani.cli "질문"
-│   ├── config.py             # config.yaml + env overrides
-│   ├── llm.py                # provider-agnostic OpenAI-compatible client
-│   └── models.py             # TaskSpec, Shortlist, SimulationSpec, ...
-├── tests/                    # 45 offline tests (stub LLM + mock HTTP + tiny PDFs)
-├── Image/
-│   └── KORANI.jpg            # the mascot
-└── ReferencePaper/
-    ├── AgenticSciML.pdf      # multi-agent framework reference
-    └── CrunchGPT.pdf         # secondary reference
-```
 
 ## References
 
