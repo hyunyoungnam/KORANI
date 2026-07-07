@@ -1,14 +1,17 @@
-"""KORANI CLI — stages A + B, for testing against a local model server.
+"""KORANI CLI — the full A–F pipeline, for testing against a local model server.
 
 Usage:
     # Mode B: vague idea → interpret → search → triage shortlist → you pick
     python -m korani.cli "저온에서 배터리 열화를 줄이는 설계를 시뮬레이션하고 싶은데..."
 
-    # Mode A: paper attached → interpret only (stage C not yet implemented)
+    # Mode A: paper attached → spec → contract (approval) → code + run
     python -m korani.cli "이 논문의 소자 시뮬레이션을 재현해줘" --paper paper.pdf
 
     # Stop after stage A
     python -m korani.cli "..." --interpret-only
+
+    # Non-interactive runs: pick from the shortlist / approve the contract
+    python -m korani.cli "..." --pick 1 --approve-contract
 """
 
 from __future__ import annotations
@@ -16,12 +19,13 @@ from __future__ import annotations
 import argparse
 import sys
 
+from korani.agents.evaluator import EvaluatorError
 from korani.agents.interpreter import InterpreterError, build_interpreter
 from korani.agents.paper_triage import TriageError
 from korani.agents.spec_extractor import SpecExtractionError
 from korani.config import load_config
 from korani.llm import LLMError
-from korani.models import Shortlist, SimulationSpec, TaskSpec
+from korani.models import EvaluationContract, Shortlist, SimulationSpec, TaskSpec
 
 
 def _print_spec(spec: TaskSpec) -> None:
@@ -100,10 +104,24 @@ def _print_simspec(spec: SimulationSpec, spec_file: str) -> None:
             if a.candidates:
                 print(f"      후보: {', '.join(a.candidates)}")
     print(f"\n저장됨: {spec_file}")
-    print("(stage D — 평가 스크립트 작성 + 승인 — 는 아직 구현되지 않았습니다)\n")
 
 
-def _run_stage_c_and_print(spec, config, candidate=None, pdf_path=None) -> int:
+def _print_contract(contract: EvaluationContract, script_path: str) -> None:
+    print("-" * 60)
+    print(f"  평가 계약 (stage D)  |  checks: {len(contract.checks)}  |  {contract.status}")
+    print("-" * 60)
+    for c in contract.checks:
+        loc = f" ({c.location})" if c.location else ""
+        if c.kind == "numeric" and c.expected_value is not None:
+            print(f"  [numeric] {c.key}{loc}: {c.description}")
+            print(f"      기대값 {c.expected_text or c.expected_value} ± {c.rel_tol * 100:.0f}%")
+        else:
+            print(f"  [{c.kind}] {c.key}{loc}: {c.description} → stage F Result Analyst")
+    print(f"\nevaluate.py: {script_path}")
+
+
+def _run_stage_c_and_print(spec, config, candidate=None, pdf_path=None):
+    """Returns (exit_code, simspec, work_id); simspec is None on failure."""
     from korani.fulltext import FulltextError
     from korani.stage_c import StageCError, run_stage_c
 
@@ -114,17 +132,199 @@ def _run_stage_c_and_print(spec, config, candidate=None, pdf_path=None) -> int:
         )
     except (StageCError, FulltextError) as exc:
         print(f"\n[Stage C] {exc}", file=sys.stderr)
-        return 1
+        return 1, None, None
     except LLMError as exc:
         print(f"\n[LLM error] {exc}", file=sys.stderr)
-        return 1
+        return 1, None, None
     except SpecExtractionError as exc:
         print(f"\n[Spec parse error] {exc}", file=sys.stderr)
         if exc.raw_output:
             print(f"\n--- raw model output ---\n{exc.raw_output}", file=sys.stderr)
-        return 2
+        return 2, None, None
     _print_simspec(simspec, spec_file)
+    return 0, simspec, work_id
+
+
+def _confirm_contract(approve_flag: bool) -> bool:
+    """Human approval checkpoint (non-negotiable). ``--approve-contract`` is
+    an explicit human decision made on the command line; otherwise ask."""
+    if approve_flag:
+        return True
+    if not sys.stdin.isatty():
+        return False
+    try:
+        answer = input("평가 계약을 승인하시겠습니까? evaluate.py 검토 후 입력 (y/N): ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return answer in ("y", "yes")
+
+
+def _run_stage_d_and_print(simspec, work_id, config, approve_flag: bool):
+    """Returns (exit_code, contract); contract is None on failure and stays
+    a draft unless the human approved it."""
+    from korani.stage_d import StageDError, approve_contract, run_stage_d
+
+    print("평가 계약 작성 중 (evaluate.py 초안)...", file=sys.stderr)
+    try:
+        contract, script_path, _ = run_stage_d(simspec, work_id, config)
+    except StageDError as exc:
+        print(f"\n[Stage D] {exc}", file=sys.stderr)
+        return 1, None
+    except LLMError as exc:
+        print(f"\n[LLM error] {exc}", file=sys.stderr)
+        return 1, None
+    except EvaluatorError as exc:
+        print(f"\n[Evaluator parse error] {exc}", file=sys.stderr)
+        if exc.raw_output:
+            print(f"\n--- raw model output ---\n{exc.raw_output}", file=sys.stderr)
+        return 2, None
+    _print_contract(contract, script_path)
+    if _confirm_contract(approve_flag):
+        approve_contract(contract, config)
+        print("\n계약이 승인되었습니다 (approved). 이 계약으로 검증합니다.")
+    else:
+        print("\n계약은 초안(draft)으로 저장되었습니다. evaluate.py를 검토한 뒤")
+        print("--approve-contract 옵션으로 승인하세요. stage E는 승인된 계약만 사용합니다.\n")
+    return 0, contract
+
+
+def _collect_ambiguity_resolutions(simspec) -> dict:
+    """Stage E user clarification attempt: ambiguities answered here apply to
+    every variant; the rest fan out via branch-on-ambiguity."""
+    if not simspec.ambiguities or not sys.stdin.isatty():
+        return {}
+    print("모호한 항목을 지금 확정할 수 있습니다 (Enter = 건너뛰고 변형(variant)으로 처리):")
+    resolutions = {}
+    for a in simspec.ambiguities:
+        candidates = f" [후보: {', '.join(a.candidates)}]" if a.candidates else ""
+        try:
+            answer = input(f"  {a.field} — {a.issue}{candidates}\n  → ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return resolutions
+        if answer:
+            resolutions[a.field] = answer
+    return resolutions
+
+
+def _print_stage_e(report) -> None:
+    print("-" * 60)
+    print(
+        f"  실행 결과 (stage E)  |  solver: {report.solver}"
+        f"  |  budget: {report.solver_runs_used}/{report.solver_runs_budget}"
+    )
+    print("-" * 60)
+    for v in report.variants:
+        mark = "✓" if v.status == "success" else "✗"
+        print(f"\n  [{mark}] {v.name}: {v.status} (실행 {v.attempts}회)")
+        for r in v.resolutions:
+            print(f"      가정: {r}")
+        if v.code_path:
+            print(f"      코드: {v.code_path}")
+        if v.status == "success" and v.eval_exit is not None:
+            verdict = "일치" if v.eval_exit == 0 else "불일치"
+            print(
+                f"      수치 검증: {verdict} — {v.eval_passed} 통과, {v.eval_failed} 실패,"
+                f" {v.eval_deferred} 건은 Result Analyst 확인 대상"
+            )
+        elif v.error_tail:
+            tail = v.error_tail.strip().splitlines()[-3:]
+            for line in tail:
+                print(f"      | {line}")
+    print()
+
+
+def _print_stage_f(report) -> None:
+    print("-" * 60)
+    print(
+        f"  검증 결과 (stage F)  |  rungs: {report.rungs_used}"
+        f"  |  budget: {report.solver_runs_used}/{report.solver_runs_budget}"
+    )
+    print("-" * 60)
+    for line in report.history:
+        print(f"  · {line}")
+    if report.analysis is not None:
+        a = report.analysis
+        vision = " (vision)" if a.used_vision else " (text-only)"
+        print(f"\n  Result Analyst{vision}: {a.verdict}")
+        if a.diagnosis:
+            print(f"    진단: {a.diagnosis}")
+        for c in a.curves:
+            print(f"    곡선 {c.key}: {c.verdict} — {c.comment}")
+    print()
+    if report.verdict == "match":
+        print(f"✅ 재현 성공 — {report.final_variant} 변형이 논문 결과와 일치합니다.")
+    elif report.verdict == "mismatch":
+        print("❌ 불일치 — 코드는 실행되지만 논문 결과와 일치하지 않습니다.")
+        print("   위 이력이 시도한 내용 전부입니다. 산출물을 직접 검토해 주세요.")
+    else:
+        print("❌ 실패 — 완전한 실행을 얻지 못했습니다. 위 이력을 검토해 주세요.")
+    print()
+
+
+def _run_stage_e_and_print(simspec, contract, config, budget):
+    """Returns (exit_code, report); report is None on failure."""
+    from korani.agents.debugger import DebuggerError
+    from korani.agents.engineer import EngineerError
+    from korani.stage_e import StageEError, run_stage_e
+
+    resolutions = _collect_ambiguity_resolutions(simspec)
+    print("코드 생성 및 실행 중 (Engineer/Debugger, solver budget 적용)...", file=sys.stderr)
+    try:
+        report = run_stage_e(
+            simspec, contract, config, user_resolutions=resolutions, budget=budget
+        )
+    except StageEError as exc:
+        print(f"\n[Stage E] {exc}", file=sys.stderr)
+        return 1, None
+    except LLMError as exc:
+        print(f"\n[LLM error] {exc}", file=sys.stderr)
+        return 1, None
+    except (EngineerError, DebuggerError) as exc:
+        print(f"\n[Stage E parse error] {exc}", file=sys.stderr)
+        raw = getattr(exc, "raw_output", "")
+        if raw:
+            print(f"\n--- raw model output ---\n{raw}", file=sys.stderr)
+        return 2, None
+    _print_stage_e(report)
+    return 0, report
+
+
+def _run_stage_f_and_print(simspec, contract, e_report, config, budget) -> int:
+    from korani.stage_f import StageFError, run_stage_f
+
+    print("결과 분석 중 (Result Analyst + escalation ladder)...", file=sys.stderr)
+    try:
+        report = run_stage_f(simspec, contract, e_report, config, budget=budget)
+    except StageFError as exc:
+        print(f"\n[Stage F] {exc}", file=sys.stderr)
+        return 1
+    except LLMError as exc:
+        print(f"\n[LLM error] {exc}", file=sys.stderr)
+        return 1
+    _print_stage_f(report)
     return 0
+
+
+def _run_stages_cdef(spec, config, approve_flag: bool, candidate=None, pdf_path=None) -> int:
+    code, simspec, work_id = _run_stage_c_and_print(
+        spec, config, candidate=candidate, pdf_path=pdf_path
+    )
+    if simspec is None:
+        return code
+    code, contract = _run_stage_d_and_print(simspec, work_id, config, approve_flag)
+    if contract is None:
+        return code
+    if contract.status != "approved":
+        return 0  # draft saved; stage E requires approval (checkpoint)
+
+    # One solver budget spans stage E and stage F's escalation ladder.
+    from korani.stage_e import SolverBudget
+
+    budget = SolverBudget(config.get("budget", {}).get("max_solver_runs", 6))
+    code, e_report = _run_stage_e_and_print(simspec, contract, config, budget)
+    if e_report is None:
+        return code
+    return _run_stage_f_and_print(simspec, contract, e_report, config, budget)
 
 
 def _pick_from_shortlist(shortlist: Shortlist, pick: int = None) -> int:
@@ -145,7 +345,7 @@ def _pick_from_shortlist(shortlist: Shortlist, pick: int = None) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        prog="korani", description="KORANI — Korean co-scientist (stages A-B test CLI)"
+        prog="korani", description="KORANI — Korean co-scientist (stages A-F test CLI)"
     )
     parser.add_argument("question", help="연구 요청 (한국어)")
     parser.add_argument("--paper", default=None, help="논문 PDF 경로 (Mode A)")
@@ -155,6 +355,11 @@ def main(argv=None) -> int:
     )
     parser.add_argument(
         "--pick", type=int, default=None, help="shortlist에서 비대화식으로 선택할 번호"
+    )
+    parser.add_argument(
+        "--approve-contract",
+        action="store_true",
+        help="stage D 평가 계약을 비대화식으로 승인 (검토했다는 명시적 결정)",
     )
     args = parser.parse_args(argv)
 
@@ -185,9 +390,11 @@ def main(argv=None) -> int:
     if args.interpret_only:
         return 0
 
-    # ── Mode A: local PDF → stage C directly ──
+    # ── Mode A: local PDF → stages C→D→E→F directly ──
     if spec.mode == "A":
-        return _run_stage_c_and_print(spec, config, pdf_path=spec.paper_path)
+        return _run_stages_cdef(
+            spec, config, args.approve_contract, pdf_path=spec.paper_path
+        )
 
     # ── Stage B: search and triage ──
     from korani.stage_b import run_stage_b  # deferred: pulls in httpx
@@ -213,7 +420,7 @@ def main(argv=None) -> int:
         return 0
     picked = shortlist.entries[chosen - 1].candidate
     print(f"\n선택됨: {picked.title}\n")
-    return _run_stage_c_and_print(spec, config, candidate=picked)
+    return _run_stages_cdef(spec, config, args.approve_contract, candidate=picked)
 
 
 if __name__ == "__main__":

@@ -26,16 +26,29 @@ models:
   paper_triage: "koni"
   spec_extractor: "koni"
 
-  # Future roles (uncomment as they are implemented):
-  # evaluator: "qwen3:32b"
-  # engineer: "qwen2.5-coder:32b"
-  # debugger: "qwen2.5-coder:14b"
-  # result_analyst: "qwen2.5-vl:32b"
+  # Stage D: drafts the evaluation contract (expected values, tolerances)
+  # from the spec — a mid-strong model (e.g. qwen3:32b) is recommended.
+  evaluator: "koni"
+
+  # Stage E: coding models per CLAUDE.md tiering — engineer wants
+  # qwen2.5-coder:32b / qwen3-coder; debugger can be smaller
+  # (e.g. qwen2.5-coder:14b). Defaults reuse the single test model.
+  engineer: "koni"
+  debugger: "koni"
+
+  # Stage F: the Result Analyst is a ⚠ RISK STAGE — a VISION model
+  # (e.g. qwen2.5-vl:32b) is strongly recommended so it can compare plots;
+  # with a text-only model it falls back to downsampled curve data.
+  # Proposer+Critic (escalation rung 2 only) share one reasoning-model slot.
+  result_analyst: "koni"
+  proposer_critic: "koni"
 
 data_dir: "data"           # korani.db, papers/, specs/ live here
 
 extraction:
-  max_chars: 24000         # paper text budget for the Spec Extractor
+  max_chars: 24000         # paper text budget PER LLM call for the Spec Extractor
+  chunk_overlap: 2000      # overlap between chunks of a long paper (two-pass extraction)
+  max_chunks: 6            # cost cap — text beyond max_chars*max_chunks is truncated
 
 search:
   providers: ["openalex", "semanticscholar"]
@@ -47,3 +60,18 @@ search:
 generation:
   temperature: 0.2
   max_tokens: 1024
+
+execution:
+  timeout_seconds: 900     # wall-clock limit per solver run (stage E)
+
+budget:
+  # Budget the solver, not just tokens (CLAUDE.md): per-task cap on
+  # simulation executions. Stage E variants, debug retries, AND the stage F
+  # escalation rungs all draw from this one pool.
+  max_solver_runs: 6
+  max_debug_retries: 2     # Debugger attempts per variant (bounded retries)
+  max_variants: 2          # branch-on-ambiguity fan-out (best-of-N, NOT a tree)
+
+analysis:
+  use_vision: true         # attach plot/page images for the Result Analyst
+  max_curve_points: 40     # CSV rows shown to the analyst as text

@@ -4,9 +4,14 @@ Tables:
 - ``works``            canonical paper metadata, upserted by DOI
 - ``fulltext_assets``  downloaded PDFs, deduplicated by sha256
 - ``simulation_specs`` extracted SimulationSpec JSON per work
+- ``evaluation_contracts`` stage D contracts (draft/approved history per work)
+- ``simulation_runs`` stage E variant outcomes: spec hash, status, scores,
+  artifact paths — powers "search past experiments" and the future
+  optimization layer's memory (CLAUDE.md Persistence).
+- ``analysis_reports`` stage F Result Analyst verdicts; the full report is a
+  file referenced by path (Analysis Base pattern).
 
-A ``simulation_runs`` table joins later with stage F (see CLAUDE.md
-Persistence). Plain sqlite3 + WAL — the CLI is synchronous and single-user;
+Plain sqlite3 + WAL — the CLI is synchronous and single-user;
 async SQLAlchemy would be dead weight here.
 """
 
@@ -18,7 +23,12 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from korani.models import PaperCandidate, SimulationSpec
+from korani.models import (
+    EvaluationContract,
+    PaperCandidate,
+    SimulationSpec,
+    VariantOutcome,
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS works (
@@ -47,6 +57,38 @@ CREATE TABLE IF NOT EXISTS simulation_specs (
     work_id    TEXT NOT NULL REFERENCES works(id),
     spec_json  TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS evaluation_contracts (
+    id            TEXT PRIMARY KEY,
+    work_id       TEXT NOT NULL REFERENCES works(id),
+    contract_json TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'draft',
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS simulation_runs (
+    id            TEXT PRIMARY KEY,
+    work_id       TEXT NOT NULL REFERENCES works(id),
+    variant       TEXT,
+    solver        TEXT,
+    spec_sha256   TEXT,
+    status        TEXT NOT NULL,
+    attempts      INTEGER,
+    eval_exit     INTEGER,
+    eval_passed   INTEGER,
+    eval_failed   INTEGER,
+    eval_deferred INTEGER,
+    code_path     TEXT,
+    results_path  TEXT,
+    error_tail    TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS analysis_reports (
+    id          TEXT PRIMARY KEY,
+    work_id     TEXT NOT NULL REFERENCES works(id),
+    variant     TEXT,
+    verdict     TEXT,
+    report_path TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
 
@@ -150,6 +192,14 @@ class Storage:
             return None
         return {"id": row[0], "work_id": row[1], "path": row[2], "format": row[3]}
 
+    def get_assets_for_work(self, work_id: str) -> list:
+        rows = self._conn.execute(
+            "SELECT id, path, format FROM fulltext_assets WHERE work_id = ?"
+            " ORDER BY created_at DESC, rowid DESC",
+            (work_id,),
+        ).fetchall()
+        return [{"id": r[0], "path": r[1], "format": r[2]} for r in rows]
+
     # ── simulation specs ───────────────────────────────────────────
 
     def save_spec(self, work_id: str, spec: SimulationSpec) -> str:
@@ -170,3 +220,86 @@ class Storage:
         if row is None:
             return None
         return SimulationSpec.model_validate_json(row[0])
+
+    # ── evaluation contracts (stage D) ─────────────────────────────
+
+    def save_contract(self, work_id: str, contract: EvaluationContract) -> str:
+        """Insert a contract snapshot; approval inserts a new approved row,
+        so the draft→approved history is preserved (latest row wins)."""
+        contract_id = str(uuid.uuid4())
+        self._conn.execute(
+            "INSERT INTO evaluation_contracts (id, work_id, contract_json, status)"
+            " VALUES (?, ?, ?, ?)",
+            (contract_id, work_id, contract.model_dump_json(), contract.status),
+        )
+        self._conn.commit()
+        return contract_id
+
+    def get_latest_contract(self, work_id: str) -> Optional[EvaluationContract]:
+        row = self._conn.execute(
+            "SELECT contract_json FROM evaluation_contracts WHERE work_id = ?"
+            " ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (work_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return EvaluationContract.model_validate_json(row[0])
+
+    # ── simulation runs (stage E) ──────────────────────────────────
+
+    def save_run(
+        self, work_id: str, spec_sha256: str, solver: str, outcome: VariantOutcome
+    ) -> str:
+        run_id = str(uuid.uuid4())
+        self._conn.execute(
+            "INSERT INTO simulation_runs (id, work_id, variant, solver,"
+            " spec_sha256, status, attempts, eval_exit, eval_passed,"
+            " eval_failed, eval_deferred, code_path, results_path, error_tail)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id,
+                work_id,
+                outcome.name,
+                solver,
+                spec_sha256,
+                outcome.status,
+                outcome.attempts,
+                outcome.eval_exit,
+                outcome.eval_passed,
+                outcome.eval_failed,
+                outcome.eval_deferred,
+                outcome.code_path,
+                outcome.results_path,
+                outcome.error_tail[-2000:],
+            ),
+        )
+        self._conn.commit()
+        return run_id
+
+    def list_runs(self, work_id: str) -> list:
+        rows = self._conn.execute(
+            "SELECT variant, solver, status, attempts, eval_passed, eval_failed,"
+            " eval_deferred, code_path, results_path, created_at"
+            " FROM simulation_runs WHERE work_id = ? ORDER BY created_at",
+            (work_id,),
+        ).fetchall()
+        keys = (
+            "variant", "solver", "status", "attempts", "eval_passed",
+            "eval_failed", "eval_deferred", "code_path", "results_path",
+            "created_at",
+        )
+        return [dict(zip(keys, row)) for row in rows]
+
+    # ── analysis reports (stage F) ─────────────────────────────────
+
+    def save_analysis(
+        self, work_id: str, variant: str, verdict: str, report_path: str
+    ) -> str:
+        analysis_id = str(uuid.uuid4())
+        self._conn.execute(
+            "INSERT INTO analysis_reports (id, work_id, variant, verdict,"
+            " report_path) VALUES (?, ?, ?, ?, ?)",
+            (analysis_id, work_id, variant, verdict, report_path),
+        )
+        self._conn.commit()
+        return analysis_id

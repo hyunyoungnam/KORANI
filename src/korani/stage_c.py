@@ -62,8 +62,13 @@ def run_stage_c(
 
     # ── Parse + trim ──
     text = extract_pdf_text(pdf_path)
-    max_chars = config.get("extraction", {}).get("max_chars", 24000)
-    text = trim_for_llm(text, max_chars)
+    ext_cfg = config.get("extraction", {})
+    max_chars = ext_cfg.get("max_chars", 24000)
+    chunk_overlap = ext_cfg.get("chunk_overlap", 2000)
+    max_chunks = ext_cfg.get("max_chunks", 6)
+    # Overall budget = per-call budget × chunk cap; the extractor chunks
+    # anything longer than one call's worth (two-pass extraction).
+    text = trim_for_llm(text, max_chars * max_chunks)
 
     # ── Extract the SimulationSpec (LLM, risk stage) ──
     if client is None:
@@ -72,7 +77,9 @@ def run_stage_c(
             api_key=config["llm"].get("api_key", "not-needed"),
         )
     extractor = SpecExtractor(client=client, model=config["models"]["spec_extractor"])
-    spec = extractor.extract(task, text)
+    spec = extractor.extract(
+        task, text, max_chars=max_chars, chunk_overlap=chunk_overlap, max_chunks=max_chunks
+    )
 
     # ── Persist: work (metadata) + asset (sha-deduped) + spec ──
     with Storage(data_dir) as storage:

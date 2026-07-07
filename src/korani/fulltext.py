@@ -6,7 +6,7 @@ import hashlib
 import re
 import uuid
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import httpx
 
@@ -92,3 +92,28 @@ def trim_for_llm(text: str, max_chars: int) -> str:
     if match and match.start() > len(text) * 0.4:
         text = text[: match.start()]
     return text[:max_chars]
+
+
+def chunk_text(text: str, max_chars: int, overlap: int = 2000) -> List[str]:
+    """Split text into <=max_chars pieces with overlap, for chunked extraction.
+
+    Prefers to cut at a newline in the last fifth of the window so parameter
+    tables and sentences are less likely to be split mid-line; the overlap
+    lets whichever chunk holds the full line recover what the cut mangled.
+    """
+    if len(text) <= max_chars:
+        return [text]
+    overlap = min(overlap, max_chars // 2)
+    chunks: List[str] = []
+    start = 0
+    while start < len(text):
+        end = min(start + max_chars, len(text))
+        if end < len(text):
+            cut = text.rfind("\n", start + int(max_chars * 0.8), end)
+            if cut > start:
+                end = cut
+        chunks.append(text[start:end])
+        if end >= len(text):
+            break
+        start = end - overlap
+    return chunks

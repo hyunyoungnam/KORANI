@@ -137,3 +137,133 @@ class SimulationSpec(BaseModel):
     target_results: List[TargetResult] = Field(default_factory=list)
     ambiguities: List[AmbiguousField] = Field(default_factory=list)
     work_id: Optional[str] = None  # set on persistence
+
+
+class EvaluationCheck(BaseModel):
+    """One verification check derived from a TargetResult (stage D).
+
+    ``key`` names the value the stage E runner must write into the results
+    file. ``kind`` separates machine-checkable numeric targets from
+    curve/qualitative ones, which the stage F Result Analyst judges instead
+    of evaluate.py. ``expected_text`` stays verbatim with units (like
+    ParameterEntry.value) so the human reviewer sees exactly what the paper
+    reported; ``expected_value`` is the parsed number evaluate.py compares
+    against.
+    """
+
+    key: str
+    description: str
+    location: str = ""  # e.g. "Figure 3", "Table 2"
+    quantity: str = ""
+    expected_text: Optional[str] = None
+    expected_value: Optional[float] = None
+    units: Optional[str] = None
+    rel_tol: float = Field(default=0.05, ge=0.0, le=1.0)
+    kind: Literal["numeric", "curve", "qualitative"] = "numeric"
+    notes: str = ""
+
+
+class EvaluationContract(BaseModel):
+    """Stage D output: how the reproduction will be verified.
+
+    Drafted by the Evaluator, rendered to evaluate.py, and locked only after
+    explicit human approval (non-negotiable checkpoint) — stage E must
+    refuse to run while ``status`` is "draft".
+    """
+
+    work_id: Optional[str] = None
+    paper_title: str = ""
+    solver: Literal["pybamm", "devsim", "none"] = "none"
+    checks: List[EvaluationCheck] = Field(default_factory=list)
+    results_file: str = "results.json"  # contract with the stage E runner
+    status: Literal["draft", "approved"] = "draft"
+
+
+class VariantPlan(BaseModel):
+    """How one stage E variant resolves the spec's ambiguities.
+
+    Branch-on-ambiguity (CLAUDE.md): ambiguities that survive the user
+    clarification attempt fan out into a few variants that resolve them
+    differently — best-of-N single generation, NOT a tree.
+    """
+
+    name: str
+    resolutions: List[str] = Field(default_factory=list)  # "field: chosen resolution"
+
+
+class VariantOutcome(BaseModel):
+    """What happened to one stage E variant, reported honestly."""
+
+    name: str
+    status: Literal[
+        "success", "solver_error", "timeout", "engineer_error", "budget_exhausted"
+    ]
+    attempts: int = 0  # solver executions consumed by this variant
+    resolutions: List[str] = Field(default_factory=list)
+    code_path: Optional[str] = None
+    results_path: Optional[str] = None
+    error_tail: str = ""
+    # evaluate.py outcome (numeric checks only; None = never ran)
+    eval_exit: Optional[int] = None
+    eval_passed: int = 0
+    eval_failed: int = 0
+    eval_deferred: int = 0  # curve/qualitative → stage F Result Analyst
+
+
+class StageEReport(BaseModel):
+    """Stage E output: every variant's outcome plus budget accounting."""
+
+    work_id: Optional[str] = None
+    solver: Literal["pybamm", "devsim", "none"] = "none"
+    variants: List[VariantOutcome] = Field(default_factory=list)
+    solver_runs_used: int = 0
+    solver_runs_budget: int = 0
+    best_variant: Optional[str] = None  # most numeric checks passed
+    session_dir: Optional[str] = None  # runs/{work_id}/{session}; stage F adds rungs here
+
+
+class CurveAssessment(BaseModel):
+    """Result Analyst verdict for one curve/qualitative check (stage F)."""
+
+    key: str
+    verdict: Literal["match", "mismatch", "uncertain"] = "uncertain"
+    comment: str = ""
+
+
+class AnalysisReport(BaseModel):
+    """Result Analyst output (stage F) — ⚠ risk stage (vision over plots).
+
+    Persisted as a file referenced from the DB (Analysis Base pattern).
+    ``verdict`` covers the whole reproduction; the honesty non-negotiable
+    applies: a match is only claimed when the evidence shows one, and
+    "uncertain" is an allowed answer.
+    """
+
+    variant: str = ""
+    verdict: Literal["match", "partial", "mismatch", "uncertain"] = "uncertain"
+    diagnosis: str = ""  # what deviates and the likely physical/numerical cause
+    suggested_fixes: List[str] = Field(default_factory=list)  # feeds rung 1
+    curves: List[CurveAssessment] = Field(default_factory=list)
+    used_vision: bool = False
+
+
+class RevisionPlan(BaseModel):
+    """Rung 2 output: implementation-level changes for a fresh Engineer
+    attempt (one Proposer↔Critic round, up to 2 plans — never a tree)."""
+
+    name: str
+    changes: List[str] = Field(default_factory=list)
+    rationale: str = ""
+
+
+class StageFReport(BaseModel):
+    """Stage F output: final verdict plus the honest escalation history."""
+
+    work_id: Optional[str] = None
+    verdict: Literal["match", "mismatch", "no_result"] = "no_result"
+    final_variant: Optional[str] = None
+    rungs_used: int = 0  # 0 = matched without escalation
+    history: List[str] = Field(default_factory=list)  # one line per ladder event
+    analysis: Optional[AnalysisReport] = None  # latest analyst report
+    solver_runs_used: int = 0
+    solver_runs_budget: int = 0

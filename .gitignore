@@ -1,0 +1,37 @@
+# Claude Code project files
+CLAUDE.md
+TODO.md
+
+# Environment variables (contains secrets)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# KORANI runtime data: korani.db, papers/, specs/, evaluations/,
+# runs/, playbook/ (config.yaml data_dir) — local state, not source
+data/
+
+# pytest / mypy
+.pytest_cache/
+.mypy_cache/

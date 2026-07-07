@@ -181,12 +181,44 @@ the PDF is downloaded (open-access only) or read locally, parsed, and the
 Spec Extractor produces a **SimulationSpec** — the equations, geometry,
 parameters (with anything missing explicitly marked, never invented),
 operating conditions, and the figures/tables the reproduction will be
-verified against. The spec is saved to `data/specs/` and SQLite for review.
+verified against. Long papers are extracted chunk-by-chunk and merged.
+The spec is saved to `data/specs/` and SQLite for review.
 
-> Currently implemented: **stage A (Interpreter)**, **stage B
-> (search-and-triage)**, and **stage C (SimulationSpec extraction)**.
-> Stages D–F are under development — see `CLAUDE.md` for the full
-> architecture and design decisions.
+**Stage D** then drafts the evaluation contract: each reported result becomes
+a check with an expected value and tolerance, rendered into a standalone
+`evaluate.py` under `data/evaluations/<work_id>/`. The contract stays a
+**draft until you approve it** — interactively at the prompt, or with
+`--approve-contract` for non-interactive runs. Stage E only runs against an
+approved contract.
+
+Once approved, **stage E** takes over: you get one chance to resolve the
+spec's ambiguities yourself; whatever survives fans out into 2–3 code
+variants that resolve them differently. The Engineer writes the
+PyBaMM/DEVSIM script (it never sees the paper's expected numbers, so it
+can't hardcode them), the script runs under a wall-clock timeout, and the
+Debugger gets a bounded number of attempts to fix solver errors — every
+execution draws from a per-task **solver budget**. Each variant that runs to
+completion is immediately scored against the approved `evaluate.py`.
+Fixes that worked are distilled into a **failure playbook**
+(`data/playbook/`) that future debugging reuses. Artifacts land in
+`data/runs/<work_id>/<session>/`.
+
+**Stage F** then verifies the outcome. The Result Analyst compares the
+reproduction to the paper — numeric check results, simulated curve data,
+and (with a vision model such as `qwen2.5-vl` configured) plot images and
+renders of the paper pages containing the cited figures. On a mismatch,
+KORANI climbs a bounded **escalation ladder**: ① one Debugger retry guided
+by the analyst's diagnosis, ② one Proposer↔Critic round producing up to two
+revised plans that re-enter stage E, ③ an honest stop that reports exactly
+what was tried and why it failed. Matches are only claimed when the
+evidence shows one — 불일치는 불일치로 보고합니다.
+
+> The full **A–F pipeline** is implemented and runs end-to-end from the
+> CLI. It has been verified with stubbed models; a live run needs a model
+> server (Ollama/vLLM) plus the solver (`pip install pybamm` and/or
+> `pip install devsim`). The two ⚠ risk stages — Spec Extractor and the
+> vision-based Result Analyst — still need benchmarking against real
+> papers. See `CLAUDE.md` for architecture and design decisions.
 > Tip: set `search.mailto` in `config.yaml` (OpenAlex polite pool); behind a
 > corporate proxy with SSL inspection, set `SSL_CERT_FILE` to your company CA
 > or, for local testing only, `search.verify_ssl: false`.

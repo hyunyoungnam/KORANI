@@ -23,13 +23,32 @@ _DEFAULTS: Dict[str, Any] = {
         "search_planner": "koni",
         "paper_triage": "koni",
         "spec_extractor": "koni",
+        "evaluator": "koni",
+        "engineer": "koni",
+        "debugger": "koni",
+        "result_analyst": "koni",
+        "proposer_critic": "koni",
     },
     "extraction": {
-        "max_chars": 24000,  # paper text sent to the Spec Extractor
+        "max_chars": 24000,  # paper text budget per Spec Extractor LLM call
+        "chunk_overlap": 2000,  # overlap between chunks (two-pass extraction)
+        "max_chunks": 6,  # cost cap on chunked extraction
     },
     "generation": {
         "temperature": 0.2,
         "max_tokens": 1024,
+    },
+    "execution": {
+        "timeout_seconds": 900,  # wall-clock limit per solver run (stage E)
+    },
+    "budget": {
+        "max_solver_runs": 6,  # per-task cap: stage E variants + retries + stage F rungs
+        "max_debug_retries": 2,  # Debugger attempts per variant
+        "max_variants": 2,  # branch-on-ambiguity fan-out (NOT a tree)
+    },
+    "analysis": {
+        "use_vision": True,  # attach plot/page images for the Result Analyst
+        "max_curve_points": 40,  # CSV rows shown to the analyst as text
     },
     "search": {
         "providers": ["openalex", "semanticscholar"],
