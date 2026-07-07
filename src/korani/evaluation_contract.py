@@ -22,11 +22,11 @@ from korani.models import EvaluationContract, SimulationSpec
 from korani.storage import Storage
 
 
-class StageDError(RuntimeError):
+class EvaluationContractError(RuntimeError):
     pass
 
 
-def run_stage_d(
+def run_evaluation_contract(
     spec: SimulationSpec,
     work_id: str,
     config: Dict,
@@ -35,7 +35,7 @@ def run_stage_d(
     """Draft the contract and persist it. Returns (contract, script_path,
     contract_path). ``client`` injectable for tests."""
     if not spec.target_results:
-        raise StageDError(
+        raise EvaluationContractError(
             "SimulationSpec has no target_results — nothing to verify a "
             "reproduction against. Review the spec file (extraction may have "
             "missed the results section) or pick a paper that reports "

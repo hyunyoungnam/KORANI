@@ -41,16 +41,16 @@ from korani.models import (
     VariantOutcome,
     VariantPlan,
 )
+from korani.engineer_debugger import SolverBudget, _run_variant, score_outcome
 from korani.runner import run_script
-from korani.stage_e import SolverBudget, _run_variant, score_outcome
 from korani.storage import Storage
 
 
-class StageFError(RuntimeError):
+class ResultVerificationError(RuntimeError):
     pass
 
 
-def run_stage_f(
+def run_result_verification(
     spec: SimulationSpec,
     contract: EvaluationContract,
     e_report: StageEReport,
@@ -386,7 +386,7 @@ def _save_run(
 
 def _persist_report(report: StageFReport, session_dir: Path, data_dir: str) -> None:
     session_dir.mkdir(parents=True, exist_ok=True)
-    (session_dir / "stage_f_report.json").write_text(
+    (session_dir / "result_verification_report.json").write_text(
         json.dumps(report.model_dump(), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )

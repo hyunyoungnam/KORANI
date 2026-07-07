@@ -1,8 +1,9 @@
 """Debugger agent — stage E.
 
 Fixes solver errors in the Engineer's script within bounded retries (the
-retry loop and the solver budget live in stage_e, not here). May receive a
-failure-playbook entry harvested from earlier runs of the same error class.
+retry loop and the solver budget live in engineer_debugger.py, not here).
+May receive a failure-playbook entry harvested from earlier runs of the
+same error class.
 """
 
 from __future__ import annotations

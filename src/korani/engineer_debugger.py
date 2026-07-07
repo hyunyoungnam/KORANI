@@ -40,7 +40,7 @@ from korani.runner import run_script
 from korani.storage import Storage
 
 
-class StageEError(RuntimeError):
+class EngineerDebuggerError(RuntimeError):
     pass
 
 
@@ -101,7 +101,7 @@ def build_variant_plans(
     return plans
 
 
-def run_stage_e(
+def run_engineer_debugger(
     spec: SimulationSpec,
     contract: EvaluationContract,
     config: Dict,
@@ -113,13 +113,13 @@ def run_stage_e(
     for tests. Pass ``budget`` to share one solver pool with stage F's
     escalation ladder (the per-task cap spans both stages)."""
     if contract.status != "approved":
-        raise StageEError(
+        raise EngineerDebuggerError(
             "The evaluation contract is still a draft — stage E only runs "
             "against a human-approved contract (rerun with --approve-contract "
             "after reviewing evaluate.py)."
         )
     if spec.solver not in ("pybamm", "devsim"):
-        raise StageEError(
+        raise EngineerDebuggerError(
             "spec.solver is %r — no supported solver identified for this "
             "paper (PyBaMM/DEVSIM only)." % spec.solver
         )

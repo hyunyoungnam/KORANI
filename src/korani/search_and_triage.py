@@ -1,6 +1,6 @@
 """Stage B assembly: Search Planner → multi-provider search → Paper Triage.
 
-The user picks from the resulting shortlist — stage B never auto-selects.
+The user picks from the resulting shortlist — this stage never auto-selects.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def _build_providers(search_config: Dict) -> List:
     return providers
 
 
-def run_stage_b(spec: TaskSpec, config: Dict, client: LLMClient = None) -> Shortlist:
+def run_search_and_triage(spec: TaskSpec, config: Dict, client: LLMClient = None) -> Shortlist:
     """Run search-and-triage for a Mode B TaskSpec and return the shortlist.
 
     ``client`` is injectable for tests; defaults to the configured endpoint.

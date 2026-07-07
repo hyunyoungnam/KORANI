@@ -120,17 +120,17 @@ def _print_contract(contract: EvaluationContract, script_path: str) -> None:
     print(f"\nevaluate.py: {script_path}")
 
 
-def _run_stage_c_and_print(spec, config, candidate=None, pdf_path=None):
+def _run_spec_extraction_and_print(spec, config, candidate=None, pdf_path=None):
     """Returns (exit_code, simspec, work_id); simspec is None on failure."""
     from korani.fulltext import FulltextError
-    from korani.stage_c import StageCError, run_stage_c
+    from korani.spec_extraction import SpecExtractionStageError, run_spec_extraction
 
     print("논문 분석 중 (PDF 파싱 + SimulationSpec 추출)...", file=sys.stderr)
     try:
-        simspec, work_id, spec_file = run_stage_c(
+        simspec, work_id, spec_file = run_spec_extraction(
             spec, config, candidate=candidate, pdf_path=pdf_path
         )
-    except (StageCError, FulltextError) as exc:
+    except (SpecExtractionStageError, FulltextError) as exc:
         print(f"\n[Stage C] {exc}", file=sys.stderr)
         return 1, None, None
     except LLMError as exc:
@@ -159,15 +159,19 @@ def _confirm_contract(approve_flag: bool) -> bool:
     return answer in ("y", "yes")
 
 
-def _run_stage_d_and_print(simspec, work_id, config, approve_flag: bool):
+def _run_evaluation_contract_and_print(simspec, work_id, config, approve_flag: bool):
     """Returns (exit_code, contract); contract is None on failure and stays
     a draft unless the human approved it."""
-    from korani.stage_d import StageDError, approve_contract, run_stage_d
+    from korani.evaluation_contract import (
+        EvaluationContractError,
+        approve_contract,
+        run_evaluation_contract,
+    )
 
     print("평가 계약 작성 중 (evaluate.py 초안)...", file=sys.stderr)
     try:
-        contract, script_path, _ = run_stage_d(simspec, work_id, config)
-    except StageDError as exc:
+        contract, script_path, _ = run_evaluation_contract(simspec, work_id, config)
+    except EvaluationContractError as exc:
         print(f"\n[Stage D] {exc}", file=sys.stderr)
         return 1, None
     except LLMError as exc:
@@ -206,7 +210,7 @@ def _collect_ambiguity_resolutions(simspec) -> dict:
     return resolutions
 
 
-def _print_stage_e(report) -> None:
+def _print_execution_report(report) -> None:
     print("-" * 60)
     print(
         f"  실행 결과 (stage E)  |  solver: {report.solver}"
@@ -233,7 +237,7 @@ def _print_stage_e(report) -> None:
     print()
 
 
-def _print_stage_f(report) -> None:
+def _print_verification_report(report) -> None:
     print("-" * 60)
     print(
         f"  검증 결과 (stage F)  |  rungs: {report.rungs_used}"
@@ -261,19 +265,19 @@ def _print_stage_f(report) -> None:
     print()
 
 
-def _run_stage_e_and_print(simspec, contract, config, budget):
+def _run_engineer_debugger_and_print(simspec, contract, config, budget):
     """Returns (exit_code, report); report is None on failure."""
     from korani.agents.debugger import DebuggerError
     from korani.agents.engineer import EngineerError
-    from korani.stage_e import StageEError, run_stage_e
+    from korani.engineer_debugger import EngineerDebuggerError, run_engineer_debugger
 
     resolutions = _collect_ambiguity_resolutions(simspec)
     print("코드 생성 및 실행 중 (Engineer/Debugger, solver budget 적용)...", file=sys.stderr)
     try:
-        report = run_stage_e(
+        report = run_engineer_debugger(
             simspec, contract, config, user_resolutions=resolutions, budget=budget
         )
-    except StageEError as exc:
+    except EngineerDebuggerError as exc:
         print(f"\n[Stage E] {exc}", file=sys.stderr)
         return 1, None
     except LLMError as exc:
@@ -285,46 +289,47 @@ def _run_stage_e_and_print(simspec, contract, config, budget):
         if raw:
             print(f"\n--- raw model output ---\n{raw}", file=sys.stderr)
         return 2, None
-    _print_stage_e(report)
+    _print_execution_report(report)
     return 0, report
 
 
-def _run_stage_f_and_print(simspec, contract, e_report, config, budget) -> int:
-    from korani.stage_f import StageFError, run_stage_f
+def _run_result_verification_and_print(simspec, contract, e_report, config, budget) -> int:
+    from korani.result_verification import ResultVerificationError, run_result_verification
 
     print("결과 분석 중 (Result Analyst + escalation ladder)...", file=sys.stderr)
     try:
-        report = run_stage_f(simspec, contract, e_report, config, budget=budget)
-    except StageFError as exc:
+        report = run_result_verification(simspec, contract, e_report, config, budget=budget)
+    except ResultVerificationError as exc:
         print(f"\n[Stage F] {exc}", file=sys.stderr)
         return 1
     except LLMError as exc:
         print(f"\n[LLM error] {exc}", file=sys.stderr)
         return 1
-    _print_stage_f(report)
+    _print_verification_report(report)
     return 0
 
 
-def _run_stages_cdef(spec, config, approve_flag: bool, candidate=None, pdf_path=None) -> int:
-    code, simspec, work_id = _run_stage_c_and_print(
+def _run_remaining_pipeline(spec, config, approve_flag: bool, candidate=None, pdf_path=None) -> int:
+    """From spec extraction through result verification (stages C-F)."""
+    code, simspec, work_id = _run_spec_extraction_and_print(
         spec, config, candidate=candidate, pdf_path=pdf_path
     )
     if simspec is None:
         return code
-    code, contract = _run_stage_d_and_print(simspec, work_id, config, approve_flag)
+    code, contract = _run_evaluation_contract_and_print(simspec, work_id, config, approve_flag)
     if contract is None:
         return code
     if contract.status != "approved":
         return 0  # draft saved; stage E requires approval (checkpoint)
 
     # One solver budget spans stage E and stage F's escalation ladder.
-    from korani.stage_e import SolverBudget
+    from korani.engineer_debugger import SolverBudget
 
     budget = SolverBudget(config.get("budget", {}).get("max_solver_runs", 6))
-    code, e_report = _run_stage_e_and_print(simspec, contract, config, budget)
+    code, e_report = _run_engineer_debugger_and_print(simspec, contract, config, budget)
     if e_report is None:
         return code
-    return _run_stage_f_and_print(simspec, contract, e_report, config, budget)
+    return _run_result_verification_and_print(simspec, contract, e_report, config, budget)
 
 
 def _pick_from_shortlist(shortlist: Shortlist, pick: int = None) -> int:
@@ -392,16 +397,16 @@ def main(argv=None) -> int:
 
     # ── Mode A: local PDF → stages C→D→E→F directly ──
     if spec.mode == "A":
-        return _run_stages_cdef(
+        return _run_remaining_pipeline(
             spec, config, args.approve_contract, pdf_path=spec.paper_path
         )
 
     # ── Stage B: search and triage ──
-    from korani.stage_b import run_stage_b  # deferred: pulls in httpx
+    from korani.search_and_triage import run_search_and_triage  # deferred: pulls in httpx
 
     print("논문 검색 중 (OpenAlex, Semantic Scholar)...", file=sys.stderr)
     try:
-        shortlist = run_stage_b(spec, config)
+        shortlist = run_search_and_triage(spec, config)
     except LLMError as exc:
         print(f"\n[LLM error] {exc}", file=sys.stderr)
         return 1
@@ -420,7 +425,7 @@ def main(argv=None) -> int:
         return 0
     picked = shortlist.entries[chosen - 1].candidate
     print(f"\n선택됨: {picked.title}\n")
-    return _run_stages_cdef(spec, config, args.approve_contract, candidate=picked)
+    return _run_remaining_pipeline(spec, config, args.approve_contract, candidate=picked)
 
 
 if __name__ == "__main__":

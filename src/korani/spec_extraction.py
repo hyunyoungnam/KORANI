@@ -25,11 +25,11 @@ from korani.models import PaperCandidate, SimulationSpec, TaskSpec
 from korani.storage import Storage
 
 
-class StageCError(RuntimeError):
+class SpecExtractionStageError(RuntimeError):
     pass
 
 
-def run_stage_c(
+def run_spec_extraction(
     task: TaskSpec,
     config: Dict,
     candidate: Optional[PaperCandidate] = None,
@@ -38,7 +38,7 @@ def run_stage_c(
 ) -> Tuple[SimulationSpec, str, str]:
     """Return (spec, work_id, spec_file_path). ``client`` injectable for tests."""
     if pdf_path is None and candidate is None:
-        raise StageCError("stage C needs either a picked candidate or a local PDF.")
+        raise SpecExtractionStageError("stage C needs either a picked candidate or a local PDF.")
 
     data_dir = config.get("data_dir", "data")
     verify_ssl = config["search"].get("verify_ssl", True)
@@ -46,11 +46,11 @@ def run_stage_c(
     # ── Acquire the PDF ──
     if pdf_path is not None:
         if not Path(pdf_path).exists():
-            raise StageCError(f"PDF not found: {pdf_path}")
+            raise SpecExtractionStageError(f"PDF not found: {pdf_path}")
         sha = sha256_of_file(pdf_path)
     else:
         if not candidate.pdf_url:
-            raise StageCError(
+            raise SpecExtractionStageError(
                 "No open-access PDF for this paper"
                 + (f" (doi: {candidate.doi})" if candidate.doi else "")
                 + ". Obtain it manually and rerun with --paper <file>."
