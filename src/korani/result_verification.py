@@ -31,7 +31,7 @@ from korani.figures import (
     read_curve_csv,
     render_curve_png,
 )
-from korani.llm import LLMClient, OpenAICompatClient
+from korani.llm import LLMClient, client_for_role
 from korani.models import (
     AnalysisReport,
     EvaluationContract,
@@ -61,11 +61,6 @@ def run_result_verification(
     """Verify the stage E outcome and climb the escalation ladder if needed.
     ``budget`` should be the same pool stage E used; ``client`` injectable
     for tests."""
-    if client is None:
-        client = OpenAICompatClient(
-            base_url=config["llm"]["base_url"],
-            api_key=config["llm"].get("api_key", "not-needed"),
-        )
     data_dir = config.get("data_dir", "data")
     budget_cfg = config.get("budget", {})
     if budget is None:
@@ -81,12 +76,14 @@ def run_result_verification(
     )
     analysis_dir = session_dir / "analysis"
 
-    analyst = ResultAnalyst(client=client, model=config["models"]["result_analyst"])
-    debugger = Debugger(client=client, model=config["models"]["debugger"])
-    engineer = Engineer(client=client, model=config["models"]["engineer"])
-    proposer_critic = ProposerCritic(
-        client=client, model=config["models"]["proposer_critic"]
-    )
+    analyst_client, analyst_model = client_for_role(config, "result_analyst", client)
+    debugger_client, debugger_model = client_for_role(config, "debugger", client)
+    engineer_client, engineer_model = client_for_role(config, "engineer", client)
+    analyst = ResultAnalyst(client=analyst_client, model=analyst_model)
+    debugger = Debugger(client=debugger_client, model=debugger_model)
+    engineer = Engineer(client=engineer_client, model=engineer_model)
+    pc_client, pc_model = client_for_role(config, "proposer_critic", client)
+    proposer_critic = ProposerCritic(client=pc_client, model=pc_model)
 
     report = StageFReport(work_id=work_id, solver_runs_budget=budget.max_runs)
     history = report.history

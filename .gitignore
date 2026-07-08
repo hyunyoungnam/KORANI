@@ -5,6 +5,9 @@ TODO.md
 # Environment variables (contains secrets)
 .env
 
+# First-run profile choice (local vs API) — per-machine, not source
+.korani-profile
+
 # Python
 __pycache__/
 *.py[cod]

@@ -29,7 +29,7 @@ from korani import playbook
 from korani.agents.debugger import Debugger, DebuggerError
 from korani.agents.engineer import Engineer, EngineerError
 from korani.knowledge import get_knowledge_module
-from korani.llm import LLMClient, OpenAICompatClient
+from korani.llm import LLMClient, client_for_role
 from korani.models import (
     EvaluationContract,
     SimulationSpec,
@@ -125,11 +125,6 @@ def run_engineer_debugger(
             "paper (PyBaMM/DEVSIM only)." % spec.solver
         )
 
-    if client is None:
-        client = OpenAICompatClient(
-            base_url=config["llm"]["base_url"],
-            api_key=config["llm"].get("api_key", "not-needed"),
-        )
     data_dir = config.get("data_dir", "data")
     budget_cfg = config.get("budget", {})
     if budget is None:
@@ -138,8 +133,10 @@ def run_engineer_debugger(
     max_variants = budget_cfg.get("max_variants", 2)
     timeout_s = config.get("execution", {}).get("timeout_seconds", 900)
 
-    engineer = Engineer(client=client, model=config["models"]["engineer"])
-    debugger = Debugger(client=client, model=config["models"]["debugger"])
+    engineer_client, engineer_model = client_for_role(config, "engineer", client)
+    debugger_client, debugger_model = client_for_role(config, "debugger", client)
+    engineer = Engineer(client=engineer_client, model=engineer_model)
+    debugger = Debugger(client=debugger_client, model=debugger_model)
     plans = build_variant_plans(spec, user_resolutions, max_variants)
 
     work_id = contract.work_id or spec.work_id

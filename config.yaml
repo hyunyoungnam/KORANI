@@ -1,47 +1,64 @@
-# KORANI configuration
+# KORANI configuration — LOCAL profile (default).
 #
-# All models are open-weight and served locally behind an OpenAI-compatible
-# endpoint (vLLM or Ollama). Swap any model by editing this file — agent code
-# never hardcodes a model name. A commercial API can be plugged in later by
-# changing base_url/api_key; the client code is provider-agnostic.
+# All models are open-weight, served locally by Ollama behind its
+# OpenAI-compatible endpoint. Swap any model by editing this file — agent
+# code never hardcodes a model name. (vLLM also works — change base_url to
+# http://localhost:8000/v1 — but Ollama is the supported default: it
+# auto-loads/unloads models per request, so a sequential A–F run needs no
+# server orchestration.)
+#
+# Model assignment policy (see CLAUDE.md): best-fit per role, with FAMILY
+# DIVERSITY on purpose — judging roles (Evaluator, Result Analyst) come from
+# different model families than the roles they judge (Engineer), so blind
+# spots don't correlate. Every model below fits a single 80GB GPU; Ollama
+# swaps them in and out automatically.
+#
+# Pull them once:
+#   ollama pull gemma3:12b gemma3:27b qwen3:32b mistral-small3.2:24b \
+#     qwen2.5-coder:32b qwen2.5-coder:14b qwen2.5vl:32b deepseek-r1:32b
+#   (KONI: see README — pulled from Hugging Face as a GGUF)
+# Ollama library tags drift over time — verify with `ollama search <name>`.
 
 llm:
-  # vLLM default: http://localhost:8000/v1
-  # Ollama default: http://localhost:11434/v1
+  # Ollama default endpoint. vLLM alternative: http://localhost:8000/v1
   base_url: "http://localhost:11434/v1"
   api_key: "not-needed"          # local servers ignore this; env KORANI_LLM_API_KEY overrides
 
 models:
-  # Role → model name as known to the serving endpoint.
-  # KONI via vLLM:   KISTI-KONI/KONI-Llama3.1-8B-Instruct-20241024
-  # KONI via Ollama: the name you pulled/created (see README), e.g.
-  #   hf.co/RichardErkhov/KISTI-KONI_-_KONI-Llama3-8B-Instruct-20240729-gguf:Q4_K_M
+  # Stage A — Korean user boundary: KONI (KISTI, Llama-based, Korean
+  # science/tech domain-tuned). The one non-negotiable role/model pairing.
   interpreter: "koni"
 
-  # Stage B/C agents. Defaults reuse the same served model so a single
-  # `ollama pull` is enough to test; per CLAUDE.md tiering, paper_triage and
-  # especially spec_extractor (RISK STAGE) benefit from a stronger model
-  # (e.g. qwen3:32b) when available.
-  search_planner: "qwen2.5:7b"
-  paper_triage: "qwen2.5:7b"
-  spec_extractor: "qwen2.5:7b"
+  # Stage B — Search Planner: small & frequent, low stakes. Gemma (Google)
+  # family for diversity from the Qwen-heavy engineering side.
+  search_planner: "gemma3:12b"
 
-  # Stage D: drafts the evaluation contract (expected values, tolerances)
-  # from the spec — a mid-strong model (e.g. qwen3:32b) is recommended.
-  evaluator: "qwen2.5:7b"
+  # Stage B — Paper Triage: mid-size judgment (reproducibility scoring).
+  paper_triage: "gemma3:27b"
 
-  # Stage E: coding models per CLAUDE.md tiering — engineer wants
-  # qwen2.5-coder:32b / qwen3-coder; debugger can be smaller
-  # (e.g. qwen2.5-coder:14b). Defaults reuse the single test model.
-  engineer: "qwen2.5:7b"
-  debugger: "qwen2.5:7b"
+  # Stage C — Spec Extractor ⚠ RISK STAGE: strongest structured-extraction
+  # model that fits one 80GB GPU.
+  spec_extractor: "qwen3:32b"
 
-  # Stage F: the Result Analyst is a ⚠ RISK STAGE — a VISION model
-  # (e.g. qwen2.5-vl:32b) is strongly recommended so it can compare plots;
-  # with a text-only model it falls back to downsampled curve data.
-  # Proposer+Critic (escalation rung 2 only) share one reasoning-model slot.
-  result_analyst: "qwen2.5:7b"
-  proposer_critic: "qwen2.5:7b"
+  # Stage D — Evaluator: judges what the Engineer must satisfy — kept in a
+  # DIFFERENT family (Mistral) than the Engineer (Qwen) on purpose.
+  evaluator: "mistral-small3.2:24b"
+
+  # Stage E — coding models. Engineer gets the strongest open coder;
+  # Debugger shares the family (it fixes the Engineer's code) but smaller —
+  # bounded retries favor speed.
+  engineer: "qwen2.5-coder:32b"
+  debugger: "qwen2.5-coder:14b"
+
+  # Stage F — Result Analyst ⚠ RISK STAGE: needs VISION to compare plots.
+  # Qwen2.5-VL is the strongest open chart/plot reader at this size;
+  # gemma3:27b is a vision-capable alternative if more family diversity is
+  # wanted here. Text-only fallback engages automatically otherwise.
+  result_analyst: "qwen2.5vl:32b"
+
+  # Escalation rung 2 only — Proposer+Critic share one REASONING model
+  # (thinking mode); DeepSeek-R1 also adds a fourth family to the mix.
+  proposer_critic: "deepseek-r1:32b"
 
 data_dir: "data"           # korani.db, papers/, specs/ live here
 

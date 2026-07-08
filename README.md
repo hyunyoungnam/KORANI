@@ -79,22 +79,39 @@ Design lineage:
   cost-tiered search tools, Korean/English language routing) follows the
   **KoCoScientist** project.
 
-## Models: free & open-source first
+## Models: two profiles — local (default) or API
 
-While the architecture is being built, KORANI runs on **free open-weight
-LLMs, self-hosted** — zero token cost, and no user/paper data leaves your
-machine. The LLM client is provider-agnostic (any OpenAI-compatible
-endpoint), so a commercial model can be swapped in later through
-`config.yaml` alone, once the architecture is complete and testing shows
-where a stronger model is worth paying for.
+On first run, KORANI asks which way to run its agents (the choice is saved;
+delete `.korani-profile` or pass `--config` to change it):
 
-- **[KONI](https://huggingface.co/KISTI-KONI)** (KISTI Open Natural
-  Intelligence — KISTI's Korean science/tech LLM, Llama-based) handles the
-  Korean user boundary — implemented now
-- Qwen3 / Qwen3-Coder / Qwen2.5-VL-class models are planned for extraction,
-  coding, and plot analysis
-- Per-agent model assignment lives in `config.yaml`; agent code never
-  hardcodes a model
+**1. Local profile — free & open-source (default, `config.yaml`).**
+Open-weight models served by **Ollama** — zero token cost, and no user/paper
+data leaves your machine. Ollama swaps models in and out of GPU memory
+automatically, so the sequential pipeline needs just one GPU (every default
+model fits a single 80 GB card). Each agent gets a model matched to its
+task, across four model families for diversity:
+
+| Agent (stage) | Model | Why |
+|---|---|---|
+| Interpreter (A) | **[KONI](https://huggingface.co/KISTI-KONI)** | KISTI's Korean science/tech LLM — the Korean boundary |
+| Search Planner / Paper Triage (B) | gemma3:12b / gemma3:27b | cheap expansion + mid-size judgment |
+| Spec Extractor (C ⚠) | qwen3:32b | strongest ≤80 GB structured extraction |
+| Evaluator (D) | mistral-small3.2:24b | judges the Engineer's work — different family on purpose |
+| Engineer / Debugger (E) | qwen2.5-coder:32b / 14b | dedicated coding models |
+| Result Analyst (F ⚠) | qwen2.5vl:32b | **vision** — compares plots against the paper |
+| Proposer+Critic (escalation) | deepseek-r1:32b | reasoning/thinking model, rarely called |
+
+**2. API profile — Anthropic + OpenAI (`config.api.yaml`).**
+A ready-to-use alternative that calls hosted frontier models: Claude
+(official `anthropic` SDK) for the Korean boundary, long-document
+extraction, coding, and escalation reasoning; GPT for triage, evaluation,
+and vision analysis — judging roles deliberately sit on the other vendor
+than the roles they judge. Keys are prompted on first run and stored in
+`.env` (gitignored, never committed). Note: paper text is sent to the
+providers on this profile.
+
+Per-agent model AND provider assignment live in the config files; agent
+code never hardcodes either.
 
 KORANI is currently a **CLI, not a product** — no web server, no UI.
 (KoCoScientist's FastAPI + WebSocket web interface is a user-friendliness
@@ -109,22 +126,29 @@ cd KORANI
 pip install -e .
 ```
 
-**2. Serve KONI locally** — either server works; both expose an
-OpenAI-compatible endpoint:
+**2. Pull the local models (Ollama)** — Ollama is the supported local
+server; it auto-loads whichever model each pipeline stage requests:
 
 ```bash
-# Option 1 — Ollama (easiest): pull a community KONI GGUF from Hugging Face
+# KONI (Korean boundary): community GGUF from Hugging Face
 ollama pull hf.co/RichardErkhov/KISTI-KONI_-_KONI-Llama3-8B-Instruct-20240729-gguf:Q4_K_M
 # then set `models.interpreter` in config.yaml to that model name
 
-# Option 2 — vLLM (needs a GPU, serves the latest original weights)
-vllm serve KISTI-KONI/KONI-Llama3.1-8B-Instruct-20241024
-# then set llm.base_url to http://localhost:8000/v1 in config.yaml
+# The rest of the roster (see config.yaml; tags drift — verify with `ollama search`)
+ollama pull gemma3:12b gemma3:27b qwen3:32b mistral-small3.2:24b \
+  qwen2.5-coder:32b qwen2.5-coder:14b qwen2.5vl:32b deepseek-r1:32b
 ```
 
-> No KONI download handy? Any Korean-capable open model works for a first
-> smoke test — e.g. `ollama pull exaone3.5` — just change
-> `models.interpreter` in `config.yaml`.
+> Just smoke-testing? One small model is enough — point every role in
+> `config.yaml` at e.g. `qwen2.5:7b` (that's what `config.safe-run.yaml`
+> does), or any Korean-capable model for the interpreter
+> (`ollama pull exaone3.5`).
+>
+> Prefer hosted APIs instead? Choose option 2 at the first-run prompt (or
+> run with `--config config.api.yaml`) — Anthropic + OpenAI keys are asked
+> for once and stored in `.env`. Advanced: vLLM also works for serving the
+> big local models faster (tensor parallelism) — it's a `base_url` change
+> in `config.yaml`.
 
 **3. Ask** — vague idea, no paper (Mode B):
 
@@ -210,8 +234,10 @@ Fixes that worked are distilled into a **failure playbook**
 
 **Stage F** then verifies the outcome. The Result Analyst compares the
 reproduction to the paper — numeric check results, simulated curve data,
-and (with a vision model such as `qwen2.5-vl` configured) plot images and
-renders of the paper pages containing the cited figures. On a mismatch,
+and plot images plus renders of the paper pages containing the cited
+figures (both default Result Analyst models — `qwen2.5vl` locally, GPT on
+the API profile — are vision-capable; a text-only model falls back to
+curve data automatically). On a mismatch,
 KORANI climbs a bounded **escalation ladder**: ① one Debugger retry guided
 by the analyst's diagnosis, ② one Proposer↔Critic round producing up to two
 revised plans that re-enter stage E, ③ an honest stop that reports exactly
@@ -219,9 +245,9 @@ what was tried and why it failed. Matches are only claimed when the
 evidence shows one — 불일치는 불일치로 보고합니다.
 
 > The full **A–F pipeline** is implemented and runs end-to-end from the
-> CLI. It has been verified with stubbed models; a live run needs a model
-> server (Ollama/vLLM) plus the solver (`pip install pybamm` and/or
-> `pip install devsim`). The two ⚠ risk stages — Spec Extractor and the
+> CLI. It has been verified with stubbed models; a live run needs Ollama
+> serving the local roster (or API keys for the API profile) plus the
+> solver (`pip install pybamm` and/or `pip install devsim`). The two ⚠ risk stages — Spec Extractor and the
 > vision-based Result Analyst — still need benchmarking against real
 > papers. See `CLAUDE.md` for architecture and design decisions.
 > Tip: set `search.mailto` in `config.yaml` (OpenAlex polite pool); behind a

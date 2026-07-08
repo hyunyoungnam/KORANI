@@ -121,15 +121,12 @@ class Interpreter:
 
 def build_interpreter(config: dict) -> Interpreter:
     """Wire an Interpreter from a loaded config dict (see korani.config)."""
-    from korani.llm import OpenAICompatClient
+    from korani.llm import client_for_role
 
-    client = OpenAICompatClient(
-        base_url=config["llm"]["base_url"],
-        api_key=config["llm"].get("api_key", "not-needed"),
-    )
+    client, model = client_for_role(config, "interpreter")
     return Interpreter(
         client=client,
-        model=config["models"]["interpreter"],
+        model=model,
         temperature=config["generation"]["temperature"],
         max_tokens=config["generation"]["max_tokens"],
     )

@@ -9,7 +9,7 @@ from typing import Dict, List
 
 from korani.agents.paper_triage import PaperTriage
 from korani.agents.search_planner import SearchPlanner
-from korani.llm import LLMClient, OpenAICompatClient
+from korani.llm import LLMClient, client_for_role
 from korani.models import Shortlist, TaskSpec
 from korani.providers import OpenAlexProvider, SemanticScholarProvider
 from korani.search import SearchCoordinator
@@ -36,14 +36,10 @@ def run_search_and_triage(spec: TaskSpec, config: Dict, client: LLMClient = None
 
     ``client`` is injectable for tests; defaults to the configured endpoint.
     """
-    if client is None:
-        client = OpenAICompatClient(
-            base_url=config["llm"]["base_url"],
-            api_key=config["llm"].get("api_key", "not-needed"),
-        )
     search_config = config["search"]
 
-    planner = SearchPlanner(client=client, model=config["models"]["search_planner"])
+    planner_client, planner_model = client_for_role(config, "search_planner", client)
+    planner = SearchPlanner(client=planner_client, model=planner_model)
     queries = planner.plan(spec)
 
     coordinator = SearchCoordinator(
@@ -53,7 +49,8 @@ def run_search_and_triage(spec: TaskSpec, config: Dict, client: LLMClient = None
     )
     candidates = coordinator.search(queries)
 
-    triage = PaperTriage(client=client, model=config["models"]["paper_triage"])
+    triage_client, triage_model = client_for_role(config, "paper_triage", client)
+    triage = PaperTriage(client=triage_client, model=triage_model)
     return triage.triage(
         spec,
         candidates,

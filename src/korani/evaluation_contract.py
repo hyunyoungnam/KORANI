@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from korani.agents.evaluator import Evaluator
-from korani.llm import LLMClient, OpenAICompatClient
+from korani.llm import LLMClient, client_for_role
 from korani.models import EvaluationContract, SimulationSpec
 from korani.storage import Storage
 
@@ -41,12 +41,8 @@ def run_evaluation_contract(
             "missed the results section) or pick a paper that reports "
             "concrete figures/tables."
         )
-    if client is None:
-        client = OpenAICompatClient(
-            base_url=config["llm"]["base_url"],
-            api_key=config["llm"].get("api_key", "not-needed"),
-        )
-    evaluator = Evaluator(client=client, model=config["models"]["evaluator"])
+    evaluator_client, evaluator_model = client_for_role(config, "evaluator", client)
+    evaluator = Evaluator(client=evaluator_client, model=evaluator_model)
     contract = evaluator.draft(spec)
     contract.work_id = work_id
     script_path, contract_path = persist_contract(contract, config)

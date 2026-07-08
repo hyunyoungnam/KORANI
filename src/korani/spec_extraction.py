@@ -20,7 +20,7 @@ from korani.fulltext import (
     sha256_of_file,
     trim_for_llm,
 )
-from korani.llm import LLMClient, OpenAICompatClient
+from korani.llm import LLMClient, client_for_role
 from korani.models import PaperCandidate, SimulationSpec, TaskSpec
 from korani.storage import Storage
 
@@ -71,12 +71,8 @@ def run_spec_extraction(
     text = trim_for_llm(text, max_chars * max_chunks)
 
     # ── Extract the SimulationSpec (LLM, risk stage) ──
-    if client is None:
-        client = OpenAICompatClient(
-            base_url=config["llm"]["base_url"],
-            api_key=config["llm"].get("api_key", "not-needed"),
-        )
-    extractor = SpecExtractor(client=client, model=config["models"]["spec_extractor"])
+    extractor_client, extractor_model = client_for_role(config, "spec_extractor", client)
+    extractor = SpecExtractor(client=extractor_client, model=extractor_model)
     spec = extractor.extract(
         task, text, max_chars=max_chars, chunk_overlap=chunk_overlap, max_chunks=max_chunks
     )

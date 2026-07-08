@@ -1,4 +1,8 @@
-"""KORANI CLI — the full A–F pipeline, for testing against a local model server.
+"""KORANI CLI — the full A–F pipeline.
+
+First interactive run asks: local models (Ollama, config.yaml) or hosted
+APIs (Anthropic+OpenAI, config.api.yaml); the choice persists in
+.korani-profile and --config always overrides it.
 
 Usage:
     # Mode B: vague idea → interpret → search → triage shortlist → you pick
@@ -17,7 +21,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from pathlib import Path
+from typing import Optional
 
 from korani.agents.evaluator import EvaluatorError
 from korani.agents.interpreter import InterpreterError, build_interpreter
@@ -348,6 +355,66 @@ def _pick_from_shortlist(shortlist: Shortlist, pick: int = None) -> int:
     return 0
 
 
+_PROFILE_FILE = ".korani-profile"
+
+
+_API_KEY_ENVS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+
+
+def _ensure_api_keys() -> None:
+    """The API profile (config.api.yaml) uses Anthropic + OpenAI. Prompt once
+    for each missing key and append to .env (gitignored)."""
+    env_path = Path(".env")
+    env_text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+    for name in _API_KEY_ENVS:
+        if os.getenv(name) or name in env_text:
+            continue
+        try:
+            key = input(f"{name} 값을 입력하세요 (.env에 저장, Enter = 건너뛰기): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            key = ""
+        if key:
+            with env_path.open("a", encoding="utf-8") as f:
+                f.write(f"{name}={key}\n")
+            print(f"{name}을(를) .env에 저장했습니다 (.gitignore에 포함되어 커밋되지 않습니다).")
+        else:
+            print(f"건너뜀 — 실행 전에 .env에 {name}을(를) 설정하세요.")
+
+
+def _choose_profile(explicit: Optional[str]) -> Optional[str]:
+    """First-run choice: local model server vs API endpoint.
+
+    --config always wins and is never remembered. Otherwise the choice
+    persists in .korani-profile (gitignored); delete that file to choose
+    again. Non-interactive first runs fall back to config.yaml (local) so
+    scripts and tests never hang on input.
+    """
+    if explicit:
+        return explicit
+    profile = Path(_PROFILE_FILE)
+    if profile.exists():
+        saved = profile.read_text(encoding="utf-8").strip()
+        return saved or None
+    if not sys.stdin.isatty():
+        return None  # load_config's default search → config.yaml (local)
+    print("KORANI 첫 실행 설정 — LLM 실행 방식을 선택하세요:")
+    print("  1) 로컬 모델 서버 (Ollama, 무료 오픈웨이트 — config.yaml)")
+    print("  2) API 호출 (Anthropic Claude + OpenAI GPT — config.api.yaml)")
+    try:
+        answer = input("선택 (1/2, Enter = 1): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    choice = "config.api.yaml" if answer == "2" else "config.yaml"
+    if choice == "config.api.yaml":
+        _ensure_api_keys()
+    profile.write_text(choice + "\n", encoding="utf-8")
+    print(
+        f"선택을 {_PROFILE_FILE}에 저장했습니다. 다시 선택하려면 이 파일을 "
+        "삭제하거나 --config 옵션을 사용하세요.\n"
+    )
+    return choice
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="korani", description="KORANI — Korean co-scientist (stages A-F CLI)"
@@ -372,12 +439,9 @@ def main(argv=None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    config = load_config(args.config)
+    config = load_config(_choose_profile(args.config))
     interpreter = build_interpreter(config)
-    print(
-        f"Interpreter model: {interpreter.model} @ {config['llm']['base_url']}",
-        file=sys.stderr,
-    )
+    print(f"Interpreter model: {interpreter.model}", file=sys.stderr)
 
     try:
         spec = interpreter.interpret(args.question, paper_path=args.paper)

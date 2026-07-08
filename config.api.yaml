@@ -1,0 +1,120 @@
+# KORANI configuration — API profile (Anthropic + OpenAI).
+#
+# Selected on first run, or via --config config.api.yaml. Built as a ready
+# framework; NOT the default during the build phase (CLAUDE.md: hosted APIs
+# are an explicit user decision — paper text and prompts leave the machine).
+#
+# Providers: Anthropic (official `anthropic` SDK) and OpenAI (openai SDK)
+# only. Each role carries its own binding; models are tiered per task and
+# deliberately split across the two vendors so judging roles come from a
+# different family than the roles they judge:
+#   - Anthropic Claude → Korean boundary, long-doc extraction, coding,
+#     escalation reasoning
+#   - OpenAI GPT       → triage/evaluation judgment, vision-based analysis
+#     (KORANI's image blocks use the OpenAI format)
+#
+# Secrets NEVER go in this file: `api_key_env` names the environment
+# variable holding the key (.env, gitignored — see .env.example). This file
+# is safe to commit.
+#
+# Model IDs move fast — verify against each provider's model list before a
+# live run. Claude IDs current as of 2026-06; GPT-4.1 family chosen because
+# it accepts the temperature/max_tokens params the OpenAI-compat client
+# sends (OpenAI's reasoning models reject them).
+
+llm:
+  # Global fallback endpoint for any role added without its own binding.
+  base_url: "https://api.openai.com/v1"
+  api_key: "not-needed"      # real keys come from .env via api_key_env below
+
+models:
+  # Stage A — Korean boundary: fast, cheap, strong Korean.
+  interpreter:
+    provider: anthropic
+    model: "claude-haiku-4-5"
+    api_key_env: ANTHROPIC_API_KEY
+
+  # Stage B — cheap high-frequency query expansion.
+  search_planner:
+    provider: openai_compat
+    model: "gpt-4.1-mini"
+    base_url: "https://api.openai.com/v1"
+    api_key_env: OPENAI_API_KEY
+
+  # Stage B — reproducibility judgment.
+  paper_triage:
+    provider: openai_compat
+    model: "gpt-4.1"
+    base_url: "https://api.openai.com/v1"
+    api_key_env: OPENAI_API_KEY
+
+  # Stage C ⚠ RISK STAGE — long-document structured extraction: Claude's
+  # long-context extraction is the strongest fit here.
+  spec_extractor:
+    provider: anthropic
+    model: "claude-sonnet-5"
+    api_key_env: ANTHROPIC_API_KEY
+
+  # Stage D — drafts the checks the Engineer must satisfy; kept on a
+  # DIFFERENT vendor than the Engineer so blind spots don't correlate.
+  evaluator:
+    provider: openai_compat
+    model: "gpt-4.1"
+    base_url: "https://api.openai.com/v1"
+    api_key_env: OPENAI_API_KEY
+
+  # Stage E — code generation (Claude: strongest coding) + cheap debugging.
+  engineer:
+    provider: anthropic
+    model: "claude-sonnet-5"
+    api_key_env: ANTHROPIC_API_KEY
+  debugger:
+    provider: anthropic
+    model: "claude-haiku-4-5"
+    api_key_env: ANTHROPIC_API_KEY
+
+  # Stage F ⚠ RISK STAGE — vision over plots. Stays on OpenAI: natively
+  # multimodal AND korani's image content blocks use the OpenAI format
+  # (the AnthropicClient does not translate them). Also cross-vendor from
+  # the Engineer whose output it judges.
+  result_analyst:
+    provider: openai_compat
+    model: "gpt-4.1"
+    base_url: "https://api.openai.com/v1"
+    api_key_env: OPENAI_API_KEY
+
+  # Escalation rung 2 only (rare) — deepest reasoning available.
+  proposer_critic:
+    provider: anthropic
+    model: "claude-opus-4-8"
+    api_key_env: ANTHROPIC_API_KEY
+
+data_dir: "data"           # korani.db, papers/, specs/ live here
+
+extraction:
+  max_chars: 24000         # paper text budget PER LLM call for the Spec Extractor
+  chunk_overlap: 2000      # overlap between chunks of a long paper (two-pass extraction)
+  max_chunks: 6            # cost cap — text beyond max_chars*max_chunks is truncated
+
+search:
+  providers: ["openalex", "semanticscholar"]
+  per_query_limit: 10      # results fetched per query per provider
+  max_candidates: 12       # candidates sent to LLM triage after dedup/pre-rank
+  shortlist_size: 5        # entries shown to the user
+  mailto: ""               # your email → OpenAlex polite pool (recommended)
+
+generation:
+  temperature: 0.2         # sent to OpenAI-compat roles; Anthropic roles ignore it
+  max_tokens: 1024
+
+execution:
+  timeout_seconds: 900     # wall-clock limit per solver run (stage E)
+
+budget:
+  max_solver_runs: 6
+  max_debug_retries: 2     # Debugger attempts per variant (bounded retries)
+  max_variants: 2          # branch-on-ambiguity fan-out (best-of-N, NOT a tree)
+
+analysis:
+  use_vision: true         # gpt-4.1 Result Analyst is multimodal
+  max_curve_points: 40     # CSV rows shown to the analyst as text

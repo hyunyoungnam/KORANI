@@ -9,6 +9,7 @@ description = "KORANI — KISTI Open Research Agentic Network Intelligence"
 requires-python = ">=3.10"
 dependencies = [
     "openai>=1.50",
+    "anthropic>=0.40",
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
