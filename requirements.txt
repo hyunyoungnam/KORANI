@@ -20,7 +20,10 @@ tenacity>=8.3
 
 # ── Domain solvers (called as black boxes) ──────────────────
 devsim>=2.8            # TCAD / semiconductor device simulation
-mkl>=2026.1; platform_system == "Windows"  # BLAS/LAPACK runtime for DEVSIM on Windows
+mkl>=2026.1            # BLAS/LAPACK runtime DEVSIM needs to initialize on
+                       # EVERY OS (not just Windows) — omitting it raises
+                       # "RuntimeError: Issues initializing DEVSIM" at
+                       # `import devsim`, before any generated code runs
 pybamm>=24.5           # battery modeling
 
 # ── Scientific stack ────────────────────────────────────────
