@@ -130,9 +130,11 @@ pip install -e .
 server; it auto-loads whichever model each pipeline stage requests:
 
 ```bash
-# KONI (Korean boundary): community GGUF from Hugging Face
-ollama pull hf.co/RichardErkhov/KISTI-KONI_-_KONI-Llama3-8B-Instruct-20240729-gguf:Q4_K_M
-# then set `models.interpreter` in config.yaml to that model name
+# KONI (Korean boundary): community GGUF of the latest instruct (20241024).
+# (Avoid the RichardErkhov mirror — its files are 0-byte/broken on HF.)
+ollama pull hf.co/QuantFactory/KONI-Llama3.1-8B-Instruct-20241024-GGUF:Q4_K_M
+ollama cp hf.co/QuantFactory/KONI-Llama3.1-8B-Instruct-20241024-GGUF:Q4_K_M koni
+ollama rm hf.co/QuantFactory/KONI-Llama3.1-8B-Instruct-20241024-GGUF:Q4_K_M
 
 # The rest of the roster (see config.yaml; tags drift — verify with `ollama search`)
 ollama pull gemma3:12b gemma3:27b qwen3:32b mistral-small3.2:24b \
