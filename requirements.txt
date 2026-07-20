@@ -24,7 +24,6 @@ mkl>=2026.1            # BLAS/LAPACK runtime DEVSIM needs to initialize on
                        # EVERY OS (not just Windows) — omitting it raises
                        # "RuntimeError: Issues initializing DEVSIM" at
                        # `import devsim`, before any generated code runs
-pybamm>=24.5           # battery modeling
 
 # ── Scientific stack ────────────────────────────────────────
 numpy>=1.26

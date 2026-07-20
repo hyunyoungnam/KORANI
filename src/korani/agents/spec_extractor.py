@@ -28,9 +28,8 @@ from korani.models import ParameterEntry, SimulationSpec, TaskSpec
 SYSTEM_PROMPT = """\
 You are the Spec Extractor agent of KORANI. Read the research paper text and \
 produce a SimulationSpec JSON so an engineer agent can REPRODUCE the paper's \
-simulation with an open-source solver:
-- PyBaMM: battery models (SPM/SPMe/DFN a.k.a. P2D, thermal, degradation).
-- DEVSIM: semiconductor TCAD (drift-diffusion class device simulation).
+simulation with DEVSIM for semiconductor TCAD (drift-diffusion class device \
+simulation).
 
 HONESTY RULES (critical - violating them poisons the whole pipeline):
 1. NEVER invent a parameter value. If it is not stated in the text, set its \
@@ -46,15 +45,15 @@ resolutions if you can think of any.
 Respond with ONE JSON object and NOTHING else:
 {
  "title": "<paper title>",
- "domain": "battery" | "semiconductor" | "unknown",
- "solver": "pybamm" | "devsim" | "none",
- "model_summary": "<one/two sentences, e.g. 'DFN (P2D) with SEI growth'>",
+ "domain": "semiconductor" | "unknown",
+ "solver": "devsim" | "none",
+ "model_summary": "<one/two sentences describing the device model>",
  "governing_equations": ["<name/description of each equation or submodel>"],
  "geometry": "<domain geometry / cell format / device structure>",
- "materials": ["<electrode/electrolyte or semiconductor materials>"],
+ "materials": ["<semiconductor, dielectric, and contact materials>"],
  "parameters": [{"name": ..., "symbol": ..., "value": ..., "units": ...,
                  "source": "paper"|"assumed"|"missing", "notes": ...}],
- "operating_conditions": ["<cycling protocol / bias sweep / temperature ...>"],
+ "operating_conditions": ["<bias sweep / temperature / illumination ...>"],
  "numerical_settings": ["<mesh, solver tolerances, timestep - if given>"],
  "target_results": [{"description": ..., "location": "Figure 3",
                      "quantity": ..., "value": ...}],
@@ -189,9 +188,9 @@ class SpecExtractor:
             raise SpecExtractionError(str(exc), raw) from exc
 
         # Normalize enums defensively; drop unknown keys via pydantic.
-        if data.get("domain") not in ("battery", "semiconductor", "unknown"):
+        if data.get("domain") not in ("semiconductor", "unknown"):
             data["domain"] = "unknown"
-        if data.get("solver") not in ("pybamm", "devsim", "none"):
+        if data.get("solver") not in ("devsim", "none"):
             data["solver"] = "none"
         data.pop("work_id", None)
         for key in (

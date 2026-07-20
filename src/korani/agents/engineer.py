@@ -18,7 +18,7 @@ SYSTEM_PROMPT = """\
 You are the Engineer agent of KORANI. Write ONE complete, runnable Python \
 script that reproduces the paper's simulation described by the \
 SimulationSpec, using the open-source solver named by the user \
-(PyBaMM for battery models, DEVSIM for semiconductor TCAD).
+(DEVSIM for semiconductor TCAD).
 
 REQUIREMENTS (the verification pipeline depends on them):
 1. Self-contained script, no command-line arguments, runs top-to-bottom \

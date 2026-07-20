@@ -11,12 +11,12 @@
 ## What is KORANI?
 
 KORANI is a multi-agent AI framework that acts as a **co-scientist** for
-engineers and researchers in Korea's semiconductor, battery, and manufacturing
-industries. The library name comes from KORANI (고라니), an animal found
+semiconductor engineers and researchers in Korea. The library name comes from
+KORANI (고라니), an animal found
 almost nowhere else on Earth but thriving in Korea.
 
-It does **not** replace the simulation software these industries already trust
-(TCAD, CFD, battery modeling tools). Instead, it wraps a team of specialized
+It does **not** replace the TCAD simulation software researchers already trust.
+Instead, it wraps a team of specialized
 LLM agents around the tools people already use:
 
 - **Workflow layer** — automates the tedious work around simulation:
@@ -45,10 +45,8 @@ KORANI then:
 5. Executes, compares the output against the paper, and iterates until it
    matches — or tells you honestly why it doesn't
 
-| Domain | Solver |
-|---|---|
-| Semiconductor / TCAD | [DEVSIM](https://devsim.org) |
-| Battery | [PyBaMM](https://pybamm.org) |
+The initial scope is semiconductor TCAD using
+[DEVSIM](https://devsim.org). Additional scientific domains may be added later.
 
 ## How it works
 
@@ -63,7 +61,7 @@ Korean request
    B. Acquire       literature search: local DB or OpenAlex / Semantic Scholar / CORE
    C. Extract       paper → SimulationSpec (human-reviewable)
    D. Contract      evaluate.py drafted from the paper's results → human approval
-   E. Implement     Engineer writes DEVSIM/PyBaMM code; Debugger fixes errors
+   E. Implement     Engineer writes DEVSIM code; Debugger fixes errors
    F. Verify        run → compare against the paper's reported results
    │
    ├─ match     →  code + results returned in Korean; run logged to the DB
@@ -155,26 +153,26 @@ ollama pull gemma3:12b gemma3:27b qwen3:32b mistral-small3.2:24b \
 **3. Ask** — vague idea, no paper (Mode B):
 
 ```bash
-python -m korani.cli "저온에서 배터리 열화를 줄이는 설계를 시뮬레이션하고 싶은데, 어떤 논문을 재현하면 좋을까?"
+python -m korani.cli "단채널 MOSFET의 전달 특성을 재현하고 싶은데, 어떤 논문이 적합할까?"
 ```
 
 ```
 ============================================================
-  KORANI  |  mode B  |  domain: battery
+  KORANI  |  mode B  |  domain: semiconductor
 ============================================================
 
 [응답]
-저온 환경에서의 배터리 열화 저감 설계 시뮬레이션 과제로 이해했습니다.
+단채널 MOSFET의 전달 특성을 DEVSIM으로 재현하는 과제로 이해했습니다.
 
 [Task (EN)]
-Design and simulate strategies to reduce battery degradation at low temperature
+Reproduce the transfer characteristics of a short-channel MOSFET
 
 [Search queries]
-  - low temperature lithium-ion battery degradation model
-  - battery aging simulation cold climate PyBaMM
+  - short-channel MOSFET DEVSIM transfer characteristics
+  - open access TCAD MOSFET drift diffusion simulation
 
 [질문]
-  - 대상 셀 화학조성(NMC811 등)이 정해져 있나요?
+  - 대상 소자 구조와 채널 길이가 정해져 있나요?
 ```
 
 Or attach a paper (Mode A — search is skipped):
@@ -187,7 +185,7 @@ In **Mode B** (no paper attached), KORANI continues past interpretation:
 the Search Planner expands your question into English queries, OpenAlex and
 Semantic Scholar are searched in parallel (free, no API key), duplicates are
 merged, and the Paper Triage agent ranks candidates by **reproducibility** —
-can this paper's simulation actually be rebuilt in PyBaMM/DEVSIM and verified?
+can this paper's simulation actually be rebuilt in DEVSIM and verified?
 You pick from the shortlist:
 
 ```
@@ -195,9 +193,9 @@ You pick from the shortlist:
   후보 논문 (reproducibility 순위)
 ------------------------------------------------------------
 
-  [1] (9.0/10, pybamm, PDF ✓) Lithium-ion battery degradation: how to model it
-      O'Kane, S., Ai, W., Madabattula, G. et al. (2022) | citations: 349
-      → Full DFN+degradation parameter set and validation plots; PyBaMM-native.
+  [1] (8.7/10, devsim, PDF ✓) Example semiconductor device-modeling paper
+      Author et al. (2022) | citations: 42
+      → Drift-diffusion model, device dimensions, parameters, and I-V validation curves.
   ...
 재현할 논문 번호를 선택하세요 (1-5, 건너뛰려면 Enter):
 ```
@@ -211,9 +209,8 @@ verified against. Long papers are extracted chunk-by-chunk and merged.
 The spec is saved to `data/specs/` and SQLite for review. By default,
 `data/` is created under the KORANI project root, so with the standard checkout
 it lives at `C:\Users\admin\Desktop\test\KORANI\data`. Each run receives a
-readable `work_id` such as `battery_01_260707` or `tcad_01_260707`, where the
-sequence increases per research category. Semiconductor/DEVSIM runs use the
-`tcad` prefix because the current semiconductor path is TCAD-specific.
+readable `work_id` such as `tcad_01_260707`, where the sequence increases for
+each TCAD study.
 
 **Stage D** then drafts the evaluation contract: each reported result becomes
 a check with an expected value and tolerance, rendered into a standalone
@@ -225,7 +222,7 @@ approved contract.
 Once approved, **stage E** takes over: you get one chance to resolve the
 spec's ambiguities yourself; whatever survives fans out into 2–3 code
 variants that resolve them differently. The Engineer writes the
-PyBaMM/DEVSIM script (it never sees the paper's expected numbers, so it
+DEVSIM script (it never sees the paper's expected numbers, so it
 can't hardcode them), the script runs under a wall-clock timeout, and the
 Debugger gets a bounded number of attempts to fix solver errors — every
 execution draws from a per-task **solver budget**. Each variant that runs to
@@ -249,7 +246,7 @@ evidence shows one — 불일치는 불일치로 보고합니다.
 > The full **A–F pipeline** is implemented and runs end-to-end from the
 > CLI. It has been verified with stubbed models; a live run needs Ollama
 > serving the local roster (or API keys for the API profile) plus the
-> solver (`pip install pybamm` and/or `pip install devsim`). The two ⚠ risk stages — Spec Extractor and the
+> solver (`pip install devsim`). The two ⚠ risk stages — Spec Extractor and the
 > vision-based Result Analyst — still need benchmarking against real
 > papers. See `CLAUDE.md` for architecture and design decisions.
 > Tip: set `search.mailto` in `config.yaml` (OpenAlex polite pool); behind a
@@ -264,4 +261,3 @@ evidence shows one — 불일치는 불일치로 보고합니다.
 - KoCoScientist — Co-STORM-based literature search & research discourse system
   (internal reference codebase)
 - [DEVSIM](https://devsim.org) — open-source TCAD device simulator
-- [PyBaMM](https://pybamm.org) — Python Battery Mathematical Modelling

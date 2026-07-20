@@ -1,7 +1,7 @@
 """Paper Triage agent — stage B (Mode B only).
 
 Ranks search candidates by REPRODUCIBILITY, not topical relevance: can this
-paper's simulation be rebuilt with PyBaMM/DEVSIM and verified against its
+paper's simulation be rebuilt with DEVSIM and verified against its
 reported results? One batched LLM call scores all candidates; the user picks
 from the shortlist (the agent never auto-selects).
 """
@@ -16,21 +16,23 @@ from korani.models import PaperCandidate, Shortlist, TaskSpec, TriageAssessment
 
 SYSTEM_PROMPT = """\
 You are the Paper Triage agent of KORANI. A researcher wants to REPRODUCE a \
-paper's simulation in Python using open-source solvers:
-- PyBaMM: battery models (SPM/SPMe/DFN a.k.a. P2D, thermal, degradation).
-- DEVSIM: semiconductor TCAD (drift-diffusion class device simulation; NOT \
+paper's simulation in Python using DEVSIM: semiconductor TCAD \
+(drift-diffusion class device simulation; NOT \
 quantum transport, NOT Monte Carlo, NOT full process simulation).
 
 For EACH candidate paper, judge REPRODUCIBILITY — not how interesting it is:
 1. Completeness: are governing equations, parameters, geometry, and boundary/\
 operating conditions likely fully specified in the paper?
-2. Solver fit: can the model realistically be built in PyBaMM or DEVSIM?
+2. Solver fit: can the model realistically be built in DEVSIM?
 3. Verifiability: does the paper report concrete results (figures/tables) to \
 validate a reproduction against?
 4. Access: an open-access PDF is a plus.
+5. Benchmark integrity: prefer conventional device-modeling applications over \
+numerical-method papers. Public source code for the paper is a negative because \
+the benchmark should test reconstruction from the paper, not code retrieval.
 
 Respond with ONE JSON array and NOTHING else, scoring EVERY candidate:
-[{"index": 1, "score": 0-10, "solver_fit": "pybamm"|"devsim"|"none",
+[{"index": 1, "score": 0-10, "solver_fit": "devsim"|"none",
   "rationale": "<one concise sentence>"}, ...]
 """
 
@@ -115,7 +117,7 @@ class PaperTriage:
             except (TypeError, ValueError):
                 score = 0.0
             solver_fit = item.get("solver_fit")
-            if solver_fit not in ("pybamm", "devsim", "none"):
+            if solver_fit not in ("devsim", "none"):
                 solver_fit = "none"
             assessments.append(
                 TriageAssessment(

@@ -119,10 +119,10 @@ def run_engineer_debugger(
             "against a human-approved contract (rerun with --approve-contract "
             "after reviewing evaluate.py)."
         )
-    if spec.solver not in ("pybamm", "devsim"):
+    if spec.solver != "devsim":
         raise EngineerDebuggerError(
             "spec.solver is %r — no supported solver identified for this "
-            "paper (PyBaMM/DEVSIM only)." % spec.solver
+            "paper (DEVSIM only)." % spec.solver
         )
 
     data_dir = config.get("data_dir", "data")

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from korani.knowledge.base import KnowledgeModule
 from korani.knowledge.devsim import DevsimKnowledgeModule
-from korani.knowledge.pybamm import PybammKnowledgeModule
 
 _MODULES = {
     "devsim": DevsimKnowledgeModule(),
-    "pybamm": PybammKnowledgeModule(),
 }
 
 

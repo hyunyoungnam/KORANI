@@ -15,13 +15,15 @@ from korani.models import TaskSpec
 SYSTEM_PROMPT = """\
 You are the Search Planner agent of KORANI, a co-scientist system that helps \
 researchers find a research paper whose simulation can be REPRODUCED with \
-open-source solvers (PyBaMM for batteries, DEVSIM for semiconductor TCAD).
+the open-source DEVSIM solver for semiconductor TCAD.
 
 Given a research task, produce diverse English literature-search queries. \
-Favor queries likely to surface papers with complete model descriptions \
-(equations, parameters) and validation data. Include at least one query \
-naming a concrete modeling approach for the domain (e.g. "P2D model", \
-"drift-diffusion") and at most one query naming the solver itself.
+Favor conventional device-modeling papers with complete model descriptions \
+(equations, parameters, geometry, and boundary conditions) and validation \
+data. Avoid papers whose main contribution is a numerical discretization or \
+solver algorithm. Include at least one query naming a concrete semiconductor \
+modeling approach (e.g. "drift-diffusion") and at most one query naming \
+DEVSIM itself.
 
 Respond with ONE JSON object and NOTHING else:
 {"queries": ["...", "..."]}   (3-5 queries)

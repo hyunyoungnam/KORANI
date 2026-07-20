@@ -145,14 +145,12 @@ class Storage:
         return work_id
 
     def _next_work_id(self, category: str) -> str:
-        """Readable id: battery_01_260707 or tcad_01_260707.
+        """Readable id such as tcad_01_260707.
 
-        Sequence increases per category across all dates, so today's second
-        battery simulation follows yesterday's first battery simulation.
+        Sequence increases across all dates.
         """
         normalized = (category or "unknown").strip().lower()
         prefix_by_category = {
-            "battery": "battery",
             "semiconductor": "tcad",
             "tcad": "tcad",
         }

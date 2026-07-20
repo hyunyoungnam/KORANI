@@ -34,7 +34,7 @@ class TaskSpec(BaseModel):
     """
 
     mode: Literal["A", "B"]
-    domain: Literal["battery", "semiconductor", "unknown"] = "unknown"
+    domain: Literal["semiconductor", "unknown"] = "unknown"
     task_en: str
     search_queries_en: List[str] = Field(default_factory=list)
     ambiguous_terms: List[AmbiguousTerm] = Field(default_factory=list)
@@ -66,7 +66,7 @@ class TriageAssessment(BaseModel):
 
     candidate: PaperCandidate
     score: float = Field(ge=0, le=10)
-    solver_fit: Literal["pybamm", "devsim", "none"] = "none"
+    solver_fit: Literal["devsim", "none"] = "none"
     rationale: str = ""
 
 
@@ -125,9 +125,9 @@ class SimulationSpec(BaseModel):
     """
 
     title: str
-    domain: Literal["battery", "semiconductor", "unknown"] = "unknown"
-    solver: Literal["pybamm", "devsim", "none"] = "none"
-    model_summary: str = ""  # e.g. "DFN (P2D) with SEI growth side reaction"
+    domain: Literal["semiconductor", "unknown"] = "unknown"
+    solver: Literal["devsim", "none"] = "none"
+    model_summary: str = ""
     governing_equations: List[str] = Field(default_factory=list)
     geometry: str = ""
     materials: List[str] = Field(default_factory=list)
@@ -173,7 +173,7 @@ class EvaluationContract(BaseModel):
 
     work_id: Optional[str] = None
     paper_title: str = ""
-    solver: Literal["pybamm", "devsim", "none"] = "none"
+    solver: Literal["devsim", "none"] = "none"
     checks: List[EvaluationCheck] = Field(default_factory=list)
     results_file: str = "results.json"  # contract with the stage E runner
     status: Literal["draft", "approved"] = "draft"
@@ -214,7 +214,7 @@ class StageEReport(BaseModel):
     """Stage E output: every variant's outcome plus budget accounting."""
 
     work_id: Optional[str] = None
-    solver: Literal["pybamm", "devsim", "none"] = "none"
+    solver: Literal["devsim", "none"] = "none"
     variants: List[VariantOutcome] = Field(default_factory=list)
     solver_runs_used: int = 0
     solver_runs_budget: int = 0
