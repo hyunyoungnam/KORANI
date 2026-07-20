@@ -4,7 +4,7 @@
 
 <h1 align="center">KORANI</h1>
 <p align="center"><b>KISTI Open Research Agentic Network Intelligence (KORANI)</b></p>
-<p align="center">한국 반도체·배터리 연구자를 위한 AI 코사이언티스트</p>
+<p align="center">한국 반도체 연구를 위한 AI 코사이언티스트</p>
 
 ---
 

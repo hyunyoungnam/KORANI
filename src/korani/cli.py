@@ -6,7 +6,7 @@ APIs (Anthropic+OpenAI, config.api.yaml); the choice persists in
 
 Usage:
     # Mode B: vague idea → interpret → search → triage shortlist → you pick
-    python -m korani.cli "저온에서 배터리 열화를 줄이는 설계를 시뮬레이션하고 싶은데..."
+    python -m korani.cli "단채널 MOSFET의 전달 특성을 시뮬레이션하고 싶은데..."
 
     # Mode A: paper attached → spec → contract (approval) → code + run
     python -m korani.cli "이 논문의 소자 시뮬레이션을 재현해줘" --paper paper.pdf
